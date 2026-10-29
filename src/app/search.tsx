@@ -22,8 +22,8 @@ export default function Search() {
   return (
     <Screen>
       <Header title="Search" back />
-      <Field label="Search posts and resources on this device" value={q} onChangeText={setQ} placeholder="e.g. stress, transfer, VPN" autoFocus returnKeyType="search" />
-      {loading ? <Loading /> : !res ? <Text variant="small">Type at least two letters. Search only looks at content stored in this app.</Text> :
+      <Field label="Search posts and resources" value={q} onChangeText={setQ} placeholder="e.g. stress, transfer, VPN" autoFocus returnKeyType="search" />
+      {loading ? <Loading /> : !res ? <Text variant="small">Type at least two letters. Search looks at community posts and resources.</Text> :
         res.posts.length + res.resources.length === 0 ? <EmptyState capy="glasses" title="No matches" text="Try a different word." /> : (
           <>
             {res.resources.length ? <Text variant="h2" style={{ marginBottom: space.sm }}>Resources</Text> : null}

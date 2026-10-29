@@ -5,10 +5,13 @@ import { router, useFocusEffect } from 'expo-router';
 import { setStatusBarStyle } from 'expo-status-bar';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { CapyHeroCard, type HeroSlide } from '@/components/CapyHeroCard';
-import { BrandMark, Card, IconButton, IconTile, Loading, Notice, Screen, Text, type IconName } from '@/components/ui';
+import { FeatureGrid } from '@/components/FeatureGrid';
+import { BrandMark, Card, IconButton, IconTile, Loading, Notice, Row, Screen, Text, type IconName } from '@/components/ui';
 import { PostCard } from '@/components/PostCard';
 import { accents, colors, radius, shadow, space, type Accent } from '@/constants/brand';
 import { greeting, outfitForRole } from '@/lib/capy';
+import { resourcesForTopics } from '@/lib/personalize';
+import { GROUP_META } from '@/lib/resourceMeta';
 import { MOOD_LABEL, periodStats } from '@/lib/moodStats';
 import { MoodIcon } from '@/components/MoodIcon';
 import { useApp } from '@/state/AppProvider';
@@ -34,10 +37,26 @@ export default function Home() {
     return () => setStatusBarStyle('dark');
   }, []));
   const { data, loading } = useData(async (repo) => {
-    const [trending, ach] = await Promise.all([repo.listPosts('work_question'), repo.listPosts('achievement')]);
-    return { trending: trending.slice(0, 2), achievement: ach[0] };
+    const [questions, ach] = await Promise.all([repo.listPosts('work_question'), repo.listPosts('achievement')]);
+    const top = questions.slice(0, 20);
+    const meta = await repo.getPostMeta(top.map((p) => p.id));
+    // "Trending": best-scored recent questions (score, then newest first).
+    const trending = [...top].sort((a, b) => (meta[b.id]?.score ?? 0) - (meta[a.id]?.score ?? 0) || b.createdAt - a.createdAt).slice(0, 2);
+    return { trending, meta, achievement: ach[0] };
   });
   const { data: moods } = useData((r) => r.listMoodCheckins());
+  // Unread messages and notifications, and what to suggest from the categories chosen at sign-up.
+  const badges = useData(async (r) => {
+    const [chat, notes, topics, resources] = await Promise.all([r.getChatUnread(), r.listNotifications(), r.getSelectedTopicIds(), r.listResources()]);
+    return { chat, notes: notes.filter((n) => !n.read).length, suggested: resourcesForTopics(resources, topics, 2) };
+  });
+  const reloadBadges = badges.reload;
+  useFocusEffect(useCallback(() => {
+    const t = setInterval(reloadBadges, 30_000);
+    return () => clearInterval(t);
+  }, [reloadBadges]));
+  const chatUnread = badges.data?.chat ?? 0;
+  const notesUnread = badges.data?.notes ?? 0;
   const { data: contrib } = useContribution();
   const week = moods ? periodStats(moods, 7) : null;
   const name = profile?.displayName && profile.displayName !== 'there' ? profile.displayName : '';
@@ -54,21 +73,21 @@ export default function Home() {
       title: !todayMood ? 'How are you feeling today?' : lowToday ? "I'm here for you today." : 'Thanks for checking in today!',
       actions: !todayMood ? [
         { icon: 'happy-outline', label: 'Check in', primary: true, onPress: () => router.push('/wellbeing') },
-        { icon: 'chatbubble-ellipses-outline', label: 'Ask Capy', onPress: () => router.push('/assistant') },
+        { icon: 'chatbubble-ellipses-outline', label: 'Ask Cappy', onPress: () => router.push('/assistant') },
         { icon: 'stats-chart-outline', label: 'Mood trends', onPress: () => router.push('/mood') },
       ] : lowToday ? [
         { icon: 'heart-outline', label: 'Get support', primary: true, onPress: () => router.push('/resource/r-eap') },
-        { icon: 'chatbubble-ellipses-outline', label: 'Talk to Capy', onPress: () => router.push('/assistant') },
+        { icon: 'chatbubble-ellipses-outline', label: 'Talk to Cappy', onPress: () => router.push('/assistant') },
       ] : [
         { icon: 'stats-chart-outline', label: 'See your trends', primary: true, onPress: () => router.push('/mood') },
-        { icon: 'chatbubble-ellipses-outline', label: 'Ask Capy', onPress: () => router.push('/assistant') },
+        { icon: 'chatbubble-ellipses-outline', label: 'Ask Cappy', onPress: () => router.push('/assistant') },
       ],
     },
     {
       key: 'ask', kicker: 'Your help assistant', pose: 'laptop', capySize: 168,
-      title: 'Need a hand?\nAsk Capy',
+      title: 'Need a hand?\nAsk Cappy',
       actions: [
-        { icon: 'chatbubble-ellipses-outline', label: 'Ask Capy', primary: true, onPress: () => router.push('/assistant') },
+        { icon: 'chatbubble-ellipses-outline', label: 'Ask Cappy', primary: true, onPress: () => router.push('/assistant') },
         { icon: 'search-outline', label: 'Search', onPress: () => router.push('/search') },
       ],
     },
@@ -91,7 +110,14 @@ export default function Home() {
           <View style={[styles.topBar, { paddingTop: insets.top + space.sm }]}>
             <BrandMark height={20} light />
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.xs }}>
-              <IconButton icon="notifications-outline" label="Notifications" color="#fff" onPress={() => router.push('/notifications')} />
+              <View>
+                <IconButton icon="chatbubble-ellipses-outline" label={chatUnread ? `Messages, ${chatUnread} new` : 'Messages'} color="#fff" onPress={() => router.push('/messages')} />
+                {chatUnread ? <View style={styles.unreadDot} importantForAccessibility="no" /> : null}
+              </View>
+              <View>
+                <IconButton icon="notifications-outline" label={notesUnread ? `Notifications, ${notesUnread} new` : 'Notifications'} color="#fff" onPress={() => router.push('/notifications')} />
+                {notesUnread ? <View style={styles.unreadDot} importantForAccessibility="no" /> : null}
+              </View>
               <Pressable accessibilityRole="button" accessibilityLabel="Profile and settings" onPress={() => router.push('/more')} hitSlop={6}
                 style={styles.avatar}>
                 <Text style={{ color: '#fff', fontWeight: '800', fontSize: 15 }}>{initial}</Text>
@@ -148,6 +174,29 @@ export default function Home() {
         ))}
       </View>
 
+      <Text variant="h2" accessibilityRole="header" style={{ marginBottom: space.md }}>Connect, recharge, grow</Text>
+      <FeatureGrid items={[
+        { label: 'Messages', hint: chatUnread ? `${chatUnread} new` : 'Private chats', icon: 'chatbubbles', accent: 'blue', href: '/messages', badge: chatUnread || undefined },
+        { label: 'People who understand', hint: 'Find a peer', icon: 'people-circle', accent: 'violet', href: '/people' },
+        { label: 'Meditate & breathe', hint: '1 to 10 minutes', icon: 'leaf', accent: 'green', href: '/meditate' },
+        { label: 'Micro-breaks', hint: 'Quick resets', icon: 'timer', accent: 'amber', href: '/microbreaks' },
+        { label: 'Recognition', hint: 'Shout-outs', icon: 'ribbon', accent: 'rose', href: '/recognition' },
+        { label: 'Communities', hint: 'Follow what you like', icon: 'planet', accent: 'teal', href: '/communities' },
+        { label: 'My Journey', hint: 'Your progress', icon: 'footsteps', accent: 'slate', href: '/journey' },
+        { label: 'Feedback to ABB', hint: 'Anonymous', icon: 'megaphone', accent: 'blue', href: '/feedback' },
+      ]} />
+
+      {badges.data?.suggested.length ? (
+        <>
+          <Text variant="h2" accessibilityRole="header" style={{ marginBottom: space.sm }}>Suggested for you</Text>
+          {badges.data.suggested.map((r) => (
+            <Row key={r.id} icon={GROUP_META[r.group].icon} accent={GROUP_META[r.group].accent} title={r.title} subtitle={r.subtitle}
+              onPress={() => router.push({ pathname: '/resource/[id]', params: { id: r.id } })} />
+          ))}
+          <View style={{ height: space.lg }} />
+        </>
+      ) : null}
+
       <Card onPress={() => router.push('/resource/r-eap')} accessibilityLabel="Need someone to talk to? See support resources"
         style={{ backgroundColor: colors.navy, borderColor: colors.navy, marginBottom: space.xs, flexDirection: 'row', alignItems: 'center', gap: space.md }}>
         <View style={{ flex: 1 }}>
@@ -165,7 +214,7 @@ export default function Home() {
         <Text variant="h2" accessibilityRole="header">Trending in Community</Text>
         <Text variant="h3" style={{ color: colors.red }} accessibilityRole="link" onPress={() => router.push('/community')}>View all</Text>
       </View>
-      {loading ? <Loading /> : data?.trending.map((p) => <PostCard key={p.id} post={p} compact />)}
+      {loading ? <Loading /> : !data?.trending.length ? <Text variant="small">No questions yet. Be the first to ask.</Text> : data.trending.map((p) => <PostCard key={p.id} post={p} meta={data.meta[p.id]} compact />)}
 
       {data?.achievement ? (
         <>
@@ -175,7 +224,7 @@ export default function Home() {
               <IconTile icon="trophy" accent="amber" size={48} />
               <View style={{ flex: 1 }}>
                 <Text variant="h3">{data.achievement.title}</Text>
-                <Text variant="small">{data.achievement.sample ? 'Sample content · ' : ''}See achievements in Community</Text>
+                <Text variant="small">See achievements in Community</Text>
               </View>
               <Ionicons name="chevron-forward" size={18} color={colors.muted} />
             </View>
@@ -191,6 +240,7 @@ const styles = StyleSheet.create({
   header: { marginTop: -space.lg, marginHorizontal: -space.lg, marginBottom: space.lg },
   body: { },
   topBar: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: space.lg },
+  unreadDot: { position: 'absolute', top: 6, right: 6, width: 10, height: 10, borderRadius: 5, backgroundColor: colors.red, borderWidth: 1.5, borderColor: colors.navy },
   avatar: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.red, alignItems: 'center', justifyContent: 'center',
     borderWidth: 2, borderColor: '#ffffff40' },
   search: { flexDirection: 'row', alignItems: 'center', gap: space.sm, minHeight: 52, paddingHorizontal: space.lg, borderRadius: radius.pill,

@@ -8,35 +8,36 @@ import { colors, radius, shadow, space } from '@/constants/brand';
 import type { CapyPoseName } from '@/lib/capy';
 
 /**
- * Capy, the app mascot. Poses are cut from the Capy character sheet (assets/capy).
- * Replace a file with a higher-resolution export of the same pose and name to upgrade it.
+ * Cappy, the app mascot. The poses in assets/capy are transparent cut-outs of the character renders in
+ * assets/capy-source (WebP, 800 px on the long side). `ratio` is width / height of each file.
+ * `happy` reuses the excited render and `glasses` the glasses-and-tablet render: they have no image of their own.
  */
 const POSES: Record<CapyPoseName, { src: number; ratio: number }> = {
-  laptop: { src: require('../../assets/capy/laptop.png'), ratio: 0.848 },
-  happy: { src: require('../../assets/capy/happy.png'), ratio: 0.99 },
-  excited: { src: require('../../assets/capy/excited.png'), ratio: 0.953 },
-  calm: { src: require('../../assets/capy/calm.png'), ratio: 0.948 },
-  thinking: { src: require('../../assets/capy/thinking.png'), ratio: 0.807 },
-  concerned: { src: require('../../assets/capy/concerned.png'), ratio: 0.906 },
-  surprised: { src: require('../../assets/capy/surprised.png'), ratio: 1.0 },
-  winking: { src: require('../../assets/capy/winking.png'), ratio: 0.92 },
-  cheerful: { src: require('../../assets/capy/cheerful.png'), ratio: 1.051 },
-  headphones: { src: require('../../assets/capy/headphones.png'), ratio: 1.0 },
-  glasses: { src: require('../../assets/capy/glasses.png'), ratio: 1.0 },
-  coffee: { src: require('../../assets/capy/coffee.png'), ratio: 0.86 },
-  hi: { src: require('../../assets/capy/hi.png'), ratio: 1.083 },
-  support: { src: require('../../assets/capy/support.png'), ratio: 1.0 },
-  cheer: { src: require('../../assets/capy/cheer.png'), ratio: 0.984 },
-  goodjob: { src: require('../../assets/capy/goodjob.png'), ratio: 1.102 },
-  takecare: { src: require('../../assets/capy/takecare.png'), ratio: 1.115 },
-  yougotthis: { src: require('../../assets/capy/yougotthis.png'), ratio: 1.068 },
-  celebrate: { src: require('../../assets/capy/celebrate.png'), ratio: 0.939 },
-  outfit_casual: { src: require('../../assets/capy/outfit_casual.png'), ratio: 0.678 },
-  outfit_formal: { src: require('../../assets/capy/outfit_formal.png'), ratio: 0.679 },
-  outfit_teamlead: { src: require('../../assets/capy/outfit_teamlead.png'), ratio: 0.689 },
-  outfit_hr: { src: require('../../assets/capy/outfit_hr.png'), ratio: 0.667 },
-  outfit_tech: { src: require('../../assets/capy/outfit_tech.png'), ratio: 0.656 },
-  outfit_wellness: { src: require('../../assets/capy/outfit_wellness.png'), ratio: 0.782 },
+  laptop: { src: require('../../assets/capy/laptop.webp'), ratio: 0.902 },
+  happy: { src: require('../../assets/capy/excited.webp'), ratio: 0.975 },
+  excited: { src: require('../../assets/capy/excited.webp'), ratio: 0.975 },
+  calm: { src: require('../../assets/capy/calm.webp'), ratio: 0.959 },
+  thinking: { src: require('../../assets/capy/thinking.webp'), ratio: 0.907 },
+  concerned: { src: require('../../assets/capy/concerned.webp'), ratio: 0.944 },
+  surprised: { src: require('../../assets/capy/surprised.webp'), ratio: 1.001 },
+  winking: { src: require('../../assets/capy/winking.webp'), ratio: 0.979 },
+  cheerful: { src: require('../../assets/capy/cheerful.webp'), ratio: 0.968 },
+  headphones: { src: require('../../assets/capy/headphones.webp'), ratio: 0.97 },
+  glasses: { src: require('../../assets/capy/goodjob.webp'), ratio: 1.001 },
+  coffee: { src: require('../../assets/capy/coffee.webp'), ratio: 0.881 },
+  hi: { src: require('../../assets/capy/hi.webp'), ratio: 1.067 },
+  support: { src: require('../../assets/capy/support.webp'), ratio: 1.001 },
+  cheer: { src: require('../../assets/capy/cheer.webp'), ratio: 1.0 },
+  goodjob: { src: require('../../assets/capy/goodjob.webp'), ratio: 1.001 },
+  takecare: { src: require('../../assets/capy/takecare.webp'), ratio: 1.093 },
+  yougotthis: { src: require('../../assets/capy/yougotthis.webp'), ratio: 1.072 },
+  celebrate: { src: require('../../assets/capy/celebrate.webp'), ratio: 1.0 },
+  outfit_casual: { src: require('../../assets/capy/outfit_casual.webp'), ratio: 0.647 },
+  outfit_formal: { src: require('../../assets/capy/outfit_formal.webp'), ratio: 0.677 },
+  outfit_teamlead: { src: require('../../assets/capy/outfit_teamlead.webp'), ratio: 0.669 },
+  outfit_hr: { src: require('../../assets/capy/outfit_hr.webp'), ratio: 0.682 },
+  outfit_tech: { src: require('../../assets/capy/outfit_tech.webp'), ratio: 0.645 },
+  outfit_wellness: { src: require('../../assets/capy/outfit_wellness.webp'), ratio: 0.728 },
 };
 
 export type CapyPose = CapyPoseName;

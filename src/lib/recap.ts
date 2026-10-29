@@ -16,7 +16,7 @@ export function monthRange(year: number, month0: number): [number, number] {
 
 const within = (t: number, [a, b]: [number, number]) => t >= a && t < b;
 
-/** Counts only the user's own local records. No scoring, no judgments. */
+/** Counts only the user's own records. No scoring, no judgments. */
 export function computeRecap(
   posts: Post[],
   bookmarks: Bookmark[],
@@ -26,7 +26,7 @@ export function computeRecap(
   month0: number,
 ): Recap {
   const range = monthRange(year, month0);
-  const mine = posts.filter((p) => !p.sample && within(p.createdAt, range));
+  const mine = posts.filter((p) => p.mine && within(p.createdAt, range));
   return {
     entriesWritten: mine.length,
     personalEntries: mine.filter((p) => p.kind === 'personal').length,

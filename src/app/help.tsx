@@ -10,7 +10,7 @@ export default function Help() {
       <View style={{ gap: space.md }}>
         <Card>
           <Text variant="h3">What this app is</Text>
-          <Text variant="body" style={{ marginTop: 4 }}>A private, supportive space to find resources, write things down and browse example questions. Everything you add stays on this device.</Text>
+          <Text variant="body" style={{ marginTop: 4 }}>A supportive space to find resources, ask colleagues, share wins and check in with yourself. Posts never show your name or email.</Text>
         </Card>
         <Card>
           <Text variant="h3">What it is not</Text>
@@ -21,7 +21,7 @@ export default function Help() {
           <Text variant="body" style={{ marginTop: 4 }}>If you or someone else is in danger, contact your local emergency services immediately. For everyday support, see the resources list.</Text>
         </Card>
       </View>
-      <Notice text="Contact details for ABB support teams aren't bundled in this prototype. They'll appear on each resource once ABB provides approved ones." />
+      <Notice text="Contact details for ABB support teams appear on each resource once ABB provides approved ones." />
       <Button label="Browse resources" variant="secondary" onPress={() => router.push('/resources')} style={{ marginTop: space.lg }} />
     </Screen>
   );

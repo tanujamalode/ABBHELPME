@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, StyleSheet, TextInput, View, type TextInputInstance } from 'react-native';
 import { Capy } from '@/components/Capy';
-import { Badge, Button, Text } from '@/components/ui';
+import { Button, Text } from '@/components/ui';
 import { accents, colors, radius, space } from '@/constants/brand';
-import { verifiedLabel, verifier } from '@/data/auth';
+import { verifier } from '@/data/auth';
 import { OTP_LENGTH, REQUEST_FAILURE_TEXT, VerificationError, type OtpChallenge, type OtpResult } from '@/lib/verification';
 
 const REASON: Record<Exclude<OtpResult, { ok: true }>['reason'], string> = {
@@ -96,15 +96,6 @@ export function OtpStep({ email, challenge, createUser = true, onChallenge, onVe
         {error ? <Text variant="small" style={{ color: colors.redDark, textAlign: 'center' }}>{error}</Text> : null}
       </View>
 
-      {verifier.isDemo && challenge.demoCode ? (
-        <View style={styles.demo}>
-          <Badge label={verifiedLabel()} tone="sample" />
-          <Text variant="small" style={{ flex: 1, color: colors.navy2 }}>
-            Demo: no email is sent. Use code <Text variant="small" style={{ fontWeight: '800', color: colors.navy, letterSpacing: 2 }}>{challenge.demoCode}</Text>.
-          </Text>
-        </View>
-      ) : null}
-
       <View style={{ gap: space.sm, marginTop: space.lg }}>
         <Button label="Verify" onPress={() => submit(code)} disabled={code.length !== OTP_LENGTH || expired} loading={busy} />
         <Button label={resendIn > 0 ? `Resend code in ${fmt(resendIn)}` : 'Resend code'} variant="ghost" onPress={resend} disabled={resendIn > 0} />
@@ -112,7 +103,7 @@ export function OtpStep({ email, challenge, createUser = true, onChallenge, onVe
       </View>
       <Text variant="small" style={{ textAlign: 'center', marginTop: space.sm }}>
         {expired ? 'This code has expired.' : `Code valid for ${fmt(challenge.expiresAt - now)}. `}
-        {verifier.isDemo ? 'Demo: your email is not stored or sent.' : 'Check your spam folder if it hasn’t arrived.'}
+        Check your spam folder if it hasn’t arrived.
       </Text>
     </View>
   );
@@ -126,6 +117,4 @@ const styles = StyleSheet.create({
   boxError: { borderColor: colors.red },
   digit: { fontSize: 24, fontWeight: '800', color: colors.navy },
   hidden: { position: 'absolute', opacity: 0, width: '100%', height: '100%' },
-  demo: { flexDirection: 'row', alignItems: 'center', gap: space.sm, padding: space.md, borderRadius: radius.lg, backgroundColor: accents.amber.bg,
-    marginTop: space.sm },
 });

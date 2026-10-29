@@ -1,53 +1,46 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
-import { Platform } from 'react-native';
 import * as LocalAuthentication from 'expo-local-authentication';
-import type { Session, User } from '@supabase/supabase-js';
-import { DEMO_MODE } from '@/constants/demo';
+import type { Session } from '@supabase/supabase-js';
 import type { Repository } from '@/data/repository';
-import { seedDemoData } from '@/lib/demoData';
 import { MemoryRepository } from '@/data/memoryRepository';
-import { SqliteRepository } from '@/data/sqliteRepository';
-import { CloudRepository } from '@/data/cloudRepository';
-import { clearDeviceOwner, getDeviceOwner, setDeviceOwner } from '@/data/owner';
+import { SupabaseRepository } from '@/data/supabaseRepository';
 import { supabase } from '@/data/supabaseClient';
 import type { NewProfileInput, Profile, ProfilePatch } from '@/data/types';
+import { syncReminders } from '@/lib/reminders';
 
-type Status = 'loading' | 'ready' | 'error';
+/** `unconfigured`: EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY are missing, so there is no backend to talk to. */
+type Status = 'loading' | 'ready' | 'error' | 'unconfigured';
 
 export interface Account { id: string; email: string }
 
 /** What happened after the email code was accepted. */
-export type SignInResult = 'ready' | 'needs_profile' | 'other_account';
+export type SignInResult = 'ready' | 'needs_profile';
 
 interface AppState {
   repo: Repository;
   status: Status;
   error: string | null;
   profile: Profile | null;
-  /** The signed-in account (cloud), or the verified demo email (no cloud). */
+  /** The signed-in account. */
   account: Account | null;
-  /** Cloud: a valid session exists. Demo: verified this run, or a local profile already exists. */
+  /** A valid session exists. */
   signedIn: boolean;
-  /** A Supabase project is configured: real email sign-in and the shared community. */
-  cloud: boolean;
+  /** Past the email code and, if the profile asks for it, the device lock. */
   unlocked: boolean;
-  /** Bumps whenever local data changes so screens can refresh. */
+  /** Bumps whenever data changes so screens can refresh. */
   version: number;
-  persistent: boolean;
   bump(): void;
   retry(): void;
   /** Call once the email code is accepted. */
-  finishSignIn(email: string): Promise<SignInResult>;
+  finishSignIn(): Promise<SignInResult>;
   createProfile(input: NewProfileInput): Promise<void>;
   updateProfile(patch: ProfilePatch): Promise<void>;
   unlock(): Promise<{ ok: boolean; message?: string }>;
   completeOnboarding(topicIds: string[]): Promise<void>;
-  /** Ends the session. Private data stays on the device, tied to this account. */
+  /** Ends the session on this device. Nothing is deleted. */
   signOut(): Promise<void>;
-  /** Removes another account's private data from this device so a new account can use it. */
-  replaceDeviceData(): Promise<void>;
-  /** Cloud and signed in: deletes the account and its shared content too. Always wipes this device. */
-  deleteAllLocalData(): Promise<void>;
+  /** Deletes the account and everything stored for it. */
+  deleteAccount(): Promise<void>;
 }
 
 const Ctx = createContext<AppState | null>(null);
@@ -60,127 +53,92 @@ export function useApp(): AppState {
 
 const toAccount = (s: Session | null): Account | null => (s ? { id: s.user.id, email: s.user.email ?? '' } : null);
 
-/** Saved with the account (never shown to others) so signing in on a new device restores the profile. */
-type AccountMeta = { display_name?: string; role?: string | null; experience?: string | null };
-
 export function AppProvider({ children, repository }: { children: React.ReactNode; repository?: Repository }) {
-  // Encrypted SQLite on devices. Web preview has no SQLCipher, so it uses a non-persistent in-memory store.
-  const persistent = !repository && Platform.OS !== 'web';
-  // With a Supabase project configured (EXPO_PUBLIC_SUPABASE_*), shared community content goes to the cloud
-  // while private data (profile, mood, notes, bookmarks) stays in the local store.
-  const cloud = !repository && !!supabase;
-  const [{ local, repo }] = useState(() => {
-    if (repository) return { local: repository, repo: repository };
-    const store: Repository = persistent ? new SqliteRepository() : new MemoryRepository();
-    return { local: store, repo: supabase ? new CloudRepository(store, supabase) : store };
-  });
+  const [repo] = useState<Repository>(() =>
+    repository ?? (supabase ? new SupabaseRepository(supabase) : new MemoryRepository()));
+  const configured = !!repository || !!supabase;
 
-  const [status, setStatus] = useState<Status>('loading');
+  const [status, setStatus] = useState<Status>(configured ? 'loading' : 'unconfigured');
   const [error, setError] = useState<string | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [session, setSession] = useState<Session | null>(null);
-  const [demoAccount, setDemoAccount] = useState<Account | null>(null);
   const [unlocked, setUnlocked] = useState(false);
   const [version, setVersion] = useState(0);
   const [attempt, setAttempt] = useState(0);
 
-  const account = cloud ? toAccount(session) : demoAccount;
-  const signedIn = cloud ? !!session : !!demoAccount || !!profile;
-
+  const account = toAccount(session);
+  const signedIn = !!session;
   const bump = useCallback(() => setVersion((v) => v + 1), []);
 
-  const saveAccountMeta = useCallback((p: Profile) => {
-    if (!cloud || !supabase) return;
-    const data: AccountMeta = { display_name: p.displayName, role: p.role, experience: p.experience };
-    supabase.auth.updateUser({ data }).catch(() => { /* best effort: the profile still exists on this device */ });
-  }, [cloud]);
-
-  /** Signed in on a device with no profile (new phone, reinstall, web reload): rebuild it from the account. */
-  const restoreProfile = useCallback(async (user: User): Promise<Profile | null> => {
-    const m = (user.user_metadata ?? {}) as AccountMeta;
-    if (!m.role || !m.experience) return null;
-    const p = await repo.createProfile({ displayName: m.display_name || 'there', lockEnabled: true, role: m.role, experience: m.experience });
-    await setDeviceOwner(user.id);
-    return p;
-  }, [repo]);
-
   useEffect(() => {
+    if (!configured) return;
     let alive = true;
     (async () => {
       try {
         await repo.init();
-        let p = await repo.getProfile();
-        let s: Session | null = null;
-        if (cloud && supabase) {
-          s = (await supabase.auth.getSession()).data.session;
-          if (s && !p) p = await restoreProfile(s.user);
-        }
+        const s = supabase ? (await supabase.auth.getSession()).data.session : null;
+        const p = s || !supabase ? await repo.getProfile() : null;
         if (!alive) return;
         setSession(s);
         setProfile(p);
+        // A profile that opted out of the device lock opens straight away; otherwise Welcome asks to unlock.
+        if (s && p && !p.lockEnabled) setUnlocked(true);
+        setError(null);
         setStatus('ready');
       } catch {
         if (!alive) return;
-        // Deliberately generic: never surface keys or stored content.
-        setError('Secure local storage could not be opened on this device.');
+        setError('Could not reach the server. Check your internet connection and try again.');
         setStatus('error');
       }
     })();
     return () => { alive = false; };
-  }, [repo, attempt, cloud, restoreProfile]);
+  }, [repo, attempt, configured]);
+
+  // Once the app is open, make sure this phone's reminders match the saved preferences (e.g. after a reinstall).
+  useEffect(() => {
+    if (!unlocked) return;
+    repo.getNotificationPrefs().then((p) => syncReminders(p)).catch(() => { /* reminders are best effort */ });
+  }, [unlocked, repo]);
 
   // Session changes from anywhere (sign-in, token refresh, sign-out, expired refresh token) re-gate navigation.
   useEffect(() => {
-    if (!cloud || !supabase) return;
+    if (!supabase) return;
     const { data } = supabase.auth.onAuthStateChange((_event, s) => {
       setSession(s);
-      if (!s) setUnlocked(false);
+      if (!s) { setProfile(null); setUnlocked(false); }
     });
     return () => data.subscription.unsubscribe();
-  }, [cloud]);
+  }, []);
 
-  const finishSignIn = useCallback(async (email: string): Promise<SignInResult> => {
-    let id: string;
-    let user: User | null = null;
-    if (cloud && supabase) {
+  const finishSignIn = useCallback(async (): Promise<SignInResult> => {
+    if (supabase) {
       const s = (await supabase.auth.getSession()).data.session;
       if (!s) throw new Error('Not signed in');
       setSession(s);
-      id = s.user.id;
-      user = s.user;
-    } else {
-      id = `demo:${email.trim().toLowerCase()}`;
-      setDemoAccount({ id, email: email.trim() });
     }
-    const [owner, existing] = await Promise.all([getDeviceOwner(), repo.getProfile()]);
-    if (existing && owner && owner !== id) return 'other_account';
-    let p = existing;
-    if (p) { if (!owner) await setDeviceOwner(id); }
-    else if (user) p = await restoreProfile(user);
+    const p = await repo.getProfile();
     if (!p) return 'needs_profile';
     setProfile(p);
     setUnlocked(true); // the email code just proved who this is
     bump();
     return 'ready';
-  }, [cloud, repo, restoreProfile, bump]);
+  }, [repo, bump]);
 
   const createProfile = useCallback(async (input: NewProfileInput) => {
     const p = await repo.createProfile({ ...input, displayName: input.displayName || 'there' });
-    if (account) await setDeviceOwner(account.id);
-    saveAccountMeta(p);
     setProfile(p);
     setUnlocked(true);
     bump();
-  }, [repo, account, saveAccountMeta, bump]);
+  }, [repo, bump]);
 
   const updateProfile = useCallback(async (patch: ProfilePatch) => {
     const p = await repo.updateProfile(patch);
-    if (p) { setProfile(p); saveAccountMeta(p); }
+    if (p) setProfile(p);
     bump();
-  }, [repo, saveAccountMeta, bump]);
+  }, [repo, bump]);
 
   const unlock = useCallback(async () => {
-    if (!profile) return { ok: false, message: 'No profile on this device yet.' };
+    if (!profile) return { ok: false, message: 'Sign in first.' };
     if (profile.lockEnabled) {
       try {
         const [hw, enrolled] = await Promise.all([LocalAuthentication.hasHardwareAsync(), LocalAuthentication.isEnrolledAsync()]);
@@ -188,7 +146,7 @@ export function AppProvider({ children, repository }: { children: React.ReactNod
           const r = await LocalAuthentication.authenticateAsync({ promptMessage: 'Unlock ABB HELP ME', cancelLabel: 'Cancel' });
           if (!r.success) return { ok: false, message: 'Unlock was cancelled or did not succeed. Please try again.' };
         }
-        // No device lock available: allow entry (no password is stored by this app).
+        // No device lock available: allow entry (the signed-in session already proves who this is).
       } catch {
         return { ok: false, message: 'Device authentication is unavailable right now. Please try again.' };
       }
@@ -199,49 +157,34 @@ export function AppProvider({ children, repository }: { children: React.ReactNod
 
   const completeOnboarding = useCallback(async (topicIds: string[]) => {
     await repo.saveSelectedTopicIds(topicIds);
-    if (DEMO_MODE) await seedDemoData(repo);
     await repo.setOnboardingComplete();
     setProfile(await repo.getProfile());
     bump();
   }, [repo, bump]);
 
-  const reopen = useCallback(() => {
+  const signOut = useCallback(async () => {
+    setUnlocked(false);
+    if (supabase) {
+      await supabase.auth.signOut({ scope: 'local' });
+      setSession(null);
+      setProfile(null);
+    }
+  }, []);
+
+  const deleteAccount = useCallback(async () => {
+    await repo.deleteAccount();
+    setSession(null);
     setProfile(null);
     setUnlocked(false);
     bump();
-    setStatus('loading');
-    setAttempt((a) => a + 1); // re-open a fresh, empty store
-  }, [bump]);
-
-  const signOut = useCallback(async () => {
-    setUnlocked(false);
-    setDemoAccount(null);
-    if (cloud && supabase) {
-      await supabase.auth.signOut({ scope: 'local' });
-      setSession(null);
-    }
-  }, [cloud]);
-
-  const replaceDeviceData = useCallback(async () => {
-    await local.deleteAllLocalData();
-    await clearDeviceOwner();
-    reopen();
-  }, [local, reopen]);
-
-  const deleteAllLocalData = useCallback(async () => {
-    await repo.deleteAllLocalData();
-    await clearDeviceOwner();
-    setSession(null);
-    setDemoAccount(null);
-    reopen();
-  }, [repo, reopen]);
+  }, [repo, bump]);
 
   const value = useMemo<AppState>(() => ({
-    repo, status, error, profile, account, signedIn, cloud, unlocked, version, persistent, bump,
+    repo, status, error, profile, account, signedIn, unlocked, version, bump,
     retry: () => { setStatus('loading'); setAttempt((a) => a + 1); },
-    finishSignIn, createProfile, updateProfile, unlock, completeOnboarding, signOut, replaceDeviceData, deleteAllLocalData,
-  }), [repo, status, error, profile, account, signedIn, cloud, unlocked, version, persistent, bump,
-    finishSignIn, createProfile, updateProfile, unlock, completeOnboarding, signOut, replaceDeviceData, deleteAllLocalData]);
+    finishSignIn, createProfile, updateProfile, unlock, completeOnboarding, signOut, deleteAccount,
+  }), [repo, status, error, profile, account, signedIn, unlocked, version, bump,
+    finishSignIn, createProfile, updateProfile, unlock, completeOnboarding, signOut, deleteAccount]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

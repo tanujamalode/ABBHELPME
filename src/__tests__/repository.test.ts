@@ -7,7 +7,7 @@ jest.mock('expo-crypto', () => {
   return { randomUUID: () => `id-${++n}` };
 });
 
-describe('local profile', () => {
+describe('profile', () => {
   it('creates a profile and marks onboarding complete', async () => {
     const repo = new MemoryRepository();
     expect(await repo.getProfile()).toBeNull();
@@ -20,11 +20,11 @@ describe('local profile', () => {
   });
 });
 
-describe('local content CRUD', () => {
-  it('creates, edits and deletes a local entry', async () => {
+describe('content CRUD', () => {
+  it('creates, edits and deletes a post', async () => {
     const repo = new MemoryRepository();
     const post = await repo.createPost({ kind: 'personal', category: 'Stress & Anxiety', title: '', body: 'a note' });
-    expect(post.sample).toBe(false);
+    expect(post.mine).toBe(true);
     expect((await repo.listPosts('personal')).some((p) => p.id === post.id)).toBe(true);
 
     const edited = await repo.updatePost(post.id, { category: 'Stress & Anxiety', title: '', body: 'edited note' });
@@ -32,17 +32,6 @@ describe('local content CRUD', () => {
 
     await repo.deletePost(post.id);
     expect(await repo.getPost(post.id)).toBeNull();
-  });
-
-  it('keeps sample content distinct and flagged', async () => {
-    const repo = new MemoryRepository();
-    await repo.createPost({ kind: 'work_question', category: 'HR', title: 'Mine', body: 'my question' });
-    const all = await repo.listPosts();
-    const samples = all.filter((p) => p.sample);
-    const mine = all.filter((p) => !p.sample);
-    expect(samples.length).toBeGreaterThan(0);
-    expect(mine).toHaveLength(1);
-    expect(samples.every((p) => p.id.startsWith('sample-'))).toBe(true);
   });
 
   it('removes bookmarks and comments when a post is deleted', async () => {
@@ -65,8 +54,8 @@ describe('validation', () => {
   });
 });
 
-describe('local recap', () => {
-  it('counts only this month\'s local records and ignores samples', async () => {
+describe('recap', () => {
+  it('counts only this month\'s own records', async () => {
     const repo = new MemoryRepository();
     await repo.createPost({ kind: 'personal', category: 'x', title: '', body: 'note one' });
     await repo.createPost({ kind: 'achievement', category: 'Teamwork', title: 'Shipped', body: 'we shipped it' });
@@ -90,22 +79,22 @@ describe('local recap', () => {
   });
 });
 
-describe('delete local data', () => {
-  it('removes profile and every local record', async () => {
+describe('delete account', () => {
+  it('removes the profile and every record', async () => {
     const repo = new MemoryRepository();
     await repo.createProfile({ displayName: 'Asha', lockEnabled: false, role: null, experience: null });
     await repo.saveSelectedTopicIds(['a', 'b']);
     const post = await repo.createPost({ kind: 'personal', category: 'x', title: '', body: 'note' });
-    await repo.setVote('post', 'sample-vpn', 1);
+    await repo.setVote('post', 'other-post', 1);
     await repo.toggleBookmark('post', post.id);
     await repo.addMoodCheckin('great');
-    await repo.deleteAllLocalData();
+    await repo.deleteAccount();
     expect(await repo.getProfile()).toBeNull();
     expect(await repo.getSelectedTopicIds()).toEqual([]);
-    expect((await repo.listPosts()).filter((p) => !p.sample)).toHaveLength(0);
+    expect(await repo.listPosts()).toHaveLength(0);
     expect(await repo.listBookmarks()).toHaveLength(0);
     expect(await repo.listMoodCheckins()).toHaveLength(0);
-    expect(await repo.listVotes()).toHaveLength(0);
+    expect(await repo.listVotes('post', ['other-post'])).toHaveLength(0);
   });
 });
 
@@ -122,20 +111,21 @@ describe('author snapshot', () => {
 });
 
 describe('votes and accepted answers', () => {
-  it("adds this device's vote to the sample baseline and can remove it", async () => {
+  it('adds a vote to the score and can remove it', async () => {
     const repo = new MemoryRepository();
-    const base = (await repo.getScores('comment', ['sample-c3']))['sample-c3'];
-    await repo.setVote('comment', 'sample-c3', 1);
-    expect((await repo.getScores('comment', ['sample-c3']))['sample-c3']).toBe(base + 1);
-    await repo.setVote('comment', 'sample-c3', null);
-    expect((await repo.getScores('comment', ['sample-c3']))['sample-c3']).toBe(base);
+    await repo.setVote('comment', 'c1', 1);
+    expect((await repo.getScores('comment', ['c1'])).c1).toBe(1);
+    await repo.setVote('comment', 'c1', null);
+    expect((await repo.getScores('comment', ['c1'])).c1).toBe(0);
   });
 
   it('requires a reason for a downvote', async () => {
     const repo = new MemoryRepository();
-    await expect(repo.setVote('comment', 'sample-c4', -1)).rejects.toThrow();
-    await repo.setVote('comment', 'sample-c4', -1, 'Outdated');
-    expect(await repo.getVote('comment', 'sample-c4')).toMatchObject({ value: -1, reason: 'Outdated' });
+    await expect(repo.setVote('comment', 'c1', -1)).rejects.toThrow();
+    await repo.setVote('comment', 'c1', -1, 'Outdated');
+    expect(await repo.getVote('comment', 'c1')).toMatchObject({ value: -1, reason: 'Outdated' });
+    await repo.setVote('post', 'p1', -1, 'Off-topic');
+    expect((await repo.getScores('post', ['p1'])).p1).toBe(-1);
   });
 
   it('lets the author accept one answer on their own question only', async () => {
@@ -147,7 +137,16 @@ describe('votes and accepted answers', () => {
     await repo.acceptAnswer(q.id, a2.id);
     const list = await repo.listComments(q.id);
     expect(list.filter((c) => c.accepted).map((c) => c.id)).toEqual([a2.id]);
-    await repo.acceptAnswer('sample-vpn', 'sample-c4');
-    expect((await repo.listComments('sample-vpn')).find((c) => c.id === 'sample-c4')?.accepted).toBe(false);
+    await repo.acceptAnswer('someone-elses-post', a1.id);
+    expect(await repo.listComments('someone-elses-post')).toEqual([]);
+  });
+
+  it('reports score, vote, saved flag and answer count together', async () => {
+    const repo = new MemoryRepository();
+    const q = await repo.createPost({ kind: 'work_question', category: 'IT', title: 'My Q', body: 'details here' });
+    await repo.addComment(q.id, 'answer');
+    await repo.toggleBookmark('post', q.id);
+    await repo.setVote('post', q.id, 1);
+    expect((await repo.getPostMeta([q.id]))[q.id]).toMatchObject({ score: 1, saved: true, comments: 1, solved: false });
   });
 });

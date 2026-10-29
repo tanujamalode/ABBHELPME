@@ -1,5 +1,13 @@
 import { localReply } from '@/lib/assistant';
-import { SEED_RESOURCES } from '@/data/seed';
+import type { Resource } from '@/data/types';
+
+const r = (id: string, group: Resource['group'], title: string): Resource => ({ id, group, title, subtitle: '', body: '', verified: false, source: 'ABB', reviewedAt: null });
+const SEED_RESOURCES: Resource[] = [
+  r('r-stress', 'wellbeing', 'Stress & Anxiety'), r('r-mindful', 'wellbeing', 'Mindfulness & Meditation'),
+  r('r-balance', 'wellbeing', 'Work-Life Balance'), r('r-eap', 'support', 'Employee Assistance Program'),
+  r('r-urgent', 'support', 'Emergency Contacts'), r('r-hr', 'hr', 'HR Policies'), r('r-it', 'it', 'IT Support'),
+  r('r-faq', 'faq', 'FAQs'), r('r-policy', 'policy', 'Code of Conduct & Policies'), r('r-workplace', 'workplace', 'Workplace & Facilities'),
+];
 
 describe('local Help Assistant', () => {
   it('routes urgent messages to emergency info first', () => {

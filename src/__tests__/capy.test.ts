@@ -7,8 +7,10 @@ import { TIERS } from '@/lib/karma';
 describe('Capy', () => {
   it('has an image file for every pose the app can ask for', () => {
     const src = fs.readFileSync(path.resolve(__dirname, '..', 'components', 'Capy.tsx'), 'utf8');
-    const files = [...src.matchAll(/assets\/capy\/(\w+)\.png/g)].map((m) => m[1]);
-    for (const f of files) expect(fs.existsSync(path.resolve(__dirname, '..', '..', 'assets', 'capy', `${f}.png`))).toBe(true);
+    const entries = [...src.matchAll(/^ {2}(\w+): \{ src: require\('\.\.\/\.\.\/assets\/capy\/(\w+)\.webp'\)/gm)];
+    const files = entries.map((m) => m[1]);
+    expect(files.length).toBeGreaterThanOrEqual(23);
+    for (const m of entries) expect(fs.existsSync(path.resolve(__dirname, '..', '..', 'assets', 'capy', `${m[2]}.webp`))).toBe(true);
     const used = [
       ...ROLE_OPTIONS.map((r) => outfitForRole(r.id)),
       ...Object.values(MOOD_REACTION).flatMap((m) => [m.pick.pose, m.saved.pose]),

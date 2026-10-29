@@ -34,7 +34,7 @@ export default function Wellbeing() {
     if (!mood) return;
     setBusy(true); setErr(null);
     try { await repo.addMoodCheckin(mood, tags); bump(); setSaved(true); setTags([]); }
-    catch { setErr('Could not save on this device. Please try again.'); }
+    catch { setErr('Could not save. Check your internet connection and try again.'); }
     setBusy(false);
   };
 
@@ -88,7 +88,7 @@ export default function Wellbeing() {
           )}
         </Card>
       ) : null}
-      <Notice icon="eye-off-outline" text="Check-ins are stored only on this device. They are not monitored and don't trigger any support or alert. This app is not monitored in real time." />
+      <Notice icon="eye-off-outline" text="Only you can see your check-ins. They are not monitored and don't trigger any support or alert. This app is not monitored in real time." />
 
       {week && moods && moods.length ? (
         <Card style={{ marginTop: space.lg }}>

@@ -131,7 +131,7 @@ export function Chip({ label, selected, onPress, disabled }: { label: string; se
 type BadgeTone = 'sample' | 'local' | 'neutral' | 'warn' | 'ok';
 const badgeTones: Record<BadgeTone, { bg: string; fg: string; icon: IconName }> = {
   sample: { bg: colors.orange, fg: '#8A5300', icon: 'flask-outline' },
-  local: { bg: colors.teal, fg: '#0B5E5A', icon: 'phone-portrait-outline' },
+  local: { bg: colors.teal, fg: '#0B5E5A', icon: 'people-outline' },
   neutral: { bg: colors.sand, fg: colors.navy2, icon: 'ellipse-outline' },
   warn: { bg: colors.orange, fg: '#8A5300', icon: 'alert-circle-outline' },
   ok: { bg: colors.green, fg: '#0F6B43', icon: 'checkmark-circle-outline' },

@@ -5,32 +5,32 @@ import { authorLine } from '@/lib/profileOptions';
 import type { Comment, MoodCheckin, Post } from '@/data/types';
 
 const H = 3_600_000;
-const post = (id: string, kind: Post['kind'], t: number, sample = false): Post =>
-  ({ id, kind, category: 'IT', title: 't', body: 'b', createdAt: t, updatedAt: t, sample, author: null });
+const post = (id: string, kind: Post['kind'], t: number, mine = true): Post =>
+  ({ id, kind, category: 'IT', title: 't', body: 'b', createdAt: t, updatedAt: t, mine, author: null, communityId: null, attachments: [], isLeader: false });
 const comment = (id: string, postId: string, t: number): Comment =>
-  ({ id, postId, body: 'b', createdAt: t, sample: false, author: null, accepted: false });
+  ({ id, postId, body: 'b', createdAt: t, mine: true, author: null, accepted: false });
 
 describe('contribution score', () => {
   const day = new Date(2026, 5, 10, 9).getTime();
 
   it('rewards answers more than questions and ignores answers to your own question', () => {
     const mine = [post('q1', 'work_question', day)];
-    const others = [post('sample-x', 'work_question', day, true)];
+    const others = [post('other-x', 'work_question', day, false)];
     const byId = new Map([...mine, ...others].map((p) => [p.id, p]));
-    const c = computeContribution(mine, [comment('c1', 'sample-x', day + H), comment('c2', 'q1', day + 2 * H)], byId);
+    const c = computeContribution(mine, [comment('c1', 'other-x', day + H), comment('c2', 'q1', day + 2 * H)], byId);
     expect(c.score).toBe(POINTS.question + POINTS.answer);
   });
 
   it('caps activity points per day', () => {
-    const others = [post('sample-x', 'work_question', day, true)];
+    const others = [post('other-x', 'work_question', day, false)];
     const byId = new Map(others.map((p) => [p.id, p]));
-    const many = Array.from({ length: 20 }, (_, i) => comment(`c${i}`, 'sample-x', day + i * 60_000));
+    const many = Array.from({ length: 20 }, (_, i) => comment(`c${i}`, 'other-x', day + i * 60_000));
     const c = computeContribution([], many, byId);
     expect(c.score).toBe(DAILY_ACTIVITY_CAP);
     expect(c.cappedDays).toBe(1);
   });
 
-  it('counts votes and accepted answers received (phase 2 input)', () => {
+  it('counts votes and accepted answers received (from colleagues)', () => {
     const c = computeContribution([], [], new Map(), { upvotes: 10, downvotes: 2, acceptedByOthers: 1 });
     expect(c.score).toBe(10 - 2 + POINTS.acceptedAnswer);
   });

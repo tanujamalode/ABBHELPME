@@ -25,7 +25,7 @@ export function ModerationReview({ result, onEdit, onPostAnyway, busy }: {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.md, marginBottom: space.md }}>
         <Capy pose={support ? 'support' : result.ok ? 'thinking' : 'concerned'} size={72} motion="pop" />
         <View style={{ flex: 1 }}>
-          <Text variant="h3" accessibilityRole="header">{support ? 'Capy is here for you' : 'Before you post'}</Text>
+          <Text variant="h3" accessibilityRole="header">{support ? 'Cappy is here for you' : 'Before you post'}</Text>
           <Text variant="small">
             {support ? 'Your post can still go up. ' : ''}A quick check on this device spotted something. Nothing has been sent anywhere.
           </Text>

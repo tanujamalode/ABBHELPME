@@ -5,6 +5,7 @@ import { Button, Chip, EmptyState, ErrorState, Header, IconButton, Loading, Noti
 import { PostCard } from '@/components/PostCard';
 import { colors, space } from '@/constants/brand';
 import { FILTERS, matchesFilter, type FeedFilter } from '@/lib/categories';
+import { forYou } from '@/lib/personalize';
 import { useData } from '@/state/useData';
 
 const PAGE = 5;
@@ -12,7 +13,7 @@ const PAGE = 5;
 export default function Community() {
   const params = useLocalSearchParams<{ filter?: string }>();
   const paramFilter = FILTERS.some((f) => f.id === params.filter) ? (params.filter as FeedFilter) : undefined;
-  const [filter, setFilter] = useState<FeedFilter>(paramFilter ?? 'all');
+  const [filter, setFilter] = useState<FeedFilter>(paramFilter ?? 'foryou');
   const [prevParam, setPrevParam] = useState(paramFilter);
   const [shown, setShown] = useState(PAGE);
   const [sort, setSort] = useState<'top' | 'new'>('top');
@@ -22,35 +23,44 @@ export default function Community() {
   }
   const { data, loading, error, reload } = useData(async (repo) => {
     const posts = await repo.listPosts();
-    const scores = await repo.getScores('post', posts.map((p) => p.id));
+    const meta = await repo.getPostMeta(posts.map((p) => p.id));
     // "Most helpful": score with a gentle age decay so new posts still surface; no engagement-bait signals.
     const now = Date.now();
     const rank: Record<string, number> = {};
-    for (const p of posts) rank[p.id] = (scores[p.id] ?? 0) / Math.pow((now - p.createdAt) / 3_600_000 + 2, 0.8);
-    return { posts, rank };
+    for (const p of posts) rank[p.id] = (meta[p.id]?.score ?? 0) / Math.pow((now - p.createdAt) / 3_600_000 + 2, 0.8);
+    const topics = await repo.getSelectedTopicIds();
+    return { posts, rank, meta, topics };
   });
 
   const list = useMemo(() => {
-    const items = (data?.posts ?? []).filter((p) => matchesFilter(p, filter));
+    const base = filter === 'foryou' ? forYou(data?.posts ?? [], data?.topics ?? []) : data?.posts ?? [];
+    const items = base.filter((p) => matchesFilter(p, filter));
     if (sort === 'new') return items;
     return [...items].sort((a, b) => (data?.rank[b.id] ?? 0) - (data?.rank[a.id] ?? 0));
   }, [data, filter, sort]);
 
   const compose = () => {
-    const type = filter === 'achievements' ? 'achievement' : filter === 'personal' ? 'personal' : filter === 'all' ? undefined : 'work_question';
+    const type = filter === 'achievements' ? 'achievement' : filter === 'personal' ? 'personal' : filter === 'polls' ? 'poll'
+      : filter === 'discussions' ? 'discussion' : filter === 'work' || filter === 'hrit' ? 'work_question' : undefined;
     if (type) { router.push({ pathname: '/compose', params: { type } }); return; }
-    Alert.alert('Add to this device', 'What would you like to write?', [
-      { text: 'Work question', onPress: () => router.push({ pathname: '/compose', params: { type: 'work_question' } }) },
+    Alert.alert('New post', 'What would you like to write?', [
+      { text: 'Question', onPress: () => router.push({ pathname: '/compose', params: { type: 'work_question' } }) },
+      { text: 'Discussion or idea', onPress: () => router.push({ pathname: '/compose', params: { type: 'discussion' } }) },
+      { text: 'Poll', onPress: () => router.push({ pathname: '/compose', params: { type: 'poll' } }) },
       { text: 'Achievement', onPress: () => router.push({ pathname: '/compose', params: { type: 'achievement' } }) },
-      { text: 'Personal note', onPress: () => router.push({ pathname: '/compose', params: { type: 'personal' } }) },
+      { text: 'Personal support', onPress: () => router.push({ pathname: '/compose', params: { type: 'personal' } }) },
       { text: 'Cancel', style: 'cancel' },
     ]);
   };
 
   return (
     <Screen>
-      <Header title="Community" right={<IconButton icon="add-circle" label="Add an entry" onPress={compose} />} />
-      <Notice text="Example posts are marked Sample content. Anything you add is On this device only — it isn't shared with other employees or visible to ABB." />
+      <Header title="Community" right={
+        <View style={{ flexDirection: 'row' }}>
+          <IconButton icon="people-outline" label="Communities" onPress={() => router.push('/communities')} />
+          <IconButton icon="add-circle" label="New post" onPress={compose} />
+        </View>} />
+      <Notice text="Posts are shared with colleagues who sign in with a verified email, without your name or email. Personal posts are anonymous unless you choose to show your role." />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingVertical: space.md }}>
         {FILTERS.map((f) => <Chip key={f.id} label={f.label} selected={filter === f.id} onPress={() => { setFilter(f.id); setShown(PAGE); }} />)}
       </ScrollView>
@@ -63,11 +73,12 @@ export default function Community() {
         ))}
       </View>
       {loading ? <Loading /> : error ? <ErrorState text={error} onRetry={reload} /> : list.length === 0 ? (
-        <EmptyState capy="headphones" title="Nothing here yet" text="Add your own entry — it stays on this device."
-          action={<Button label="Add an entry" onPress={compose} />} />
+        <EmptyState capy="headphones" title="Nothing here yet"
+          text={filter === 'foryou' ? 'Nothing in your categories yet. Try All, or change your categories in your profile.' : 'Be the first to post in this section.'}
+          action={<Button label="New post" onPress={compose} />} />
       ) : (
         <View>
-          {list.slice(0, shown).map((p) => <PostCard key={p.id} post={p} />)}
+          {list.slice(0, shown).map((p) => <PostCard key={p.id} post={p} meta={data?.meta[p.id]} />)}
           {shown < list.length ? <Button label="Load more" variant="secondary" onPress={() => setShown((s) => s + PAGE)} /> : null}
         </View>
       )}

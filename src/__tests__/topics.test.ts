@@ -1,33 +1,53 @@
 import { MIN_TOPIC_COUNT, TOPIC_CATALOGUE, canContinue, toggleTopic } from '@/lib/topics';
+import { forYou, genreOfPost, resourcesForTopics } from '@/lib/personalize';
+import { CATEGORIES } from '@/lib/categories';
+import type { PostKind, Resource } from '@/data/types';
 
-describe('minimum-three topic rule', () => {
-  const ids = TOPIC_CATALOGUE.map((t) => t.id);
+const topicIds = () => TOPIC_CATALOGUE.map((t) => t.id as string);
 
-  it('offers twelve topics and requires at least three', () => {
-    expect(ids).toHaveLength(12);
-    expect(MIN_TOPIC_COUNT).toBe(3);
+describe('seven support categories', () => {
+  const ids = topicIds();
+
+  it('offers the seven categories and needs at least one', () => {
+    expect(ids).toEqual(['mental', 'workplace', 'relationships', 'career', 'team', 'personal', 'questions']);
+    expect(MIN_TOPIC_COUNT).toBe(1);
+    expect(canContinue([])).toBe(false);
+    expect(canContinue(toggleTopic([], ids[0]))).toBe(true);
   });
 
-  it('cannot continue until three are selected', () => {
-    let sel: string[] = [];
-    for (let i = 0; i < 2; i++) sel = toggleTopic(sel, ids[i]);
-    expect(canContinue(sel)).toBe(false);
-    sel = toggleTopic(sel, ids[2]);
-    expect(canContinue(sel)).toBe(true);
-  });
-
-  it('allows selecting every topic', () => {
+  it('allows selecting every category and deselecting again', () => {
     let sel: string[] = [];
     for (const id of ids) sel = toggleTopic(sel, id);
-    expect(sel).toHaveLength(ids.length);
-    expect(canContinue(sel)).toBe(true);
+    expect(sel).toHaveLength(7);
+    sel = toggleTopic(sel, ids[0]);
+    expect(sel).toHaveLength(6);
+  });
+});
+
+describe('personalisation', () => {
+  const post = (kind: PostKind, category: string, communityId: string | null = null) => ({ kind, category, communityId });
+
+  it('maps every category of every kind to a support category', () => {
+    for (const kind of Object.keys(CATEGORIES) as PostKind[]) {
+      for (const category of CATEGORIES[kind]) expect(topicIds()).toContain(genreOfPost(post(kind, category)));
+    }
   });
 
-  it('deselecting below three blocks continuing again', () => {
-    let sel: string[] = [];
-    for (let i = 0; i < 3; i++) sel = toggleTopic(sel, ids[i]);
-    sel = toggleTopic(sel, ids[0]);
-    expect(sel).toHaveLength(2);
-    expect(canContinue(sel)).toBe(false);
+  it('prefers the community over the category', () => {
+    expect(genreOfPost(post('discussion', 'ABB life', 'career-growth'))).toBe('career');
+  });
+
+  it('filters "For you" by the chosen categories, and shows everything when none are chosen', () => {
+    const posts = [post('personal', 'Burnout'), post('work_question', 'IT'), post('achievement', 'Learning')];
+    expect(forYou(posts, ['mental'])).toEqual([posts[0]]);
+    expect(forYou(posts, ['questions', 'career'])).toEqual([posts[1], posts[2]]);
+    expect(forYou(posts, [])).toEqual(posts);
+  });
+
+  it('suggests resources for the chosen categories, without duplicates', () => {
+    const r = (id: string): Resource => ({ id, group: 'wellbeing', title: id, subtitle: '', body: '', verified: false, source: 'ABB', reviewedAt: null });
+    const all = ['r-stress', 'r-mindful', 'r-eap', 'r-balance', 'r-faq', 'r-hr'].map(r);
+    expect(resourcesForTopics(all, ['mental', 'relationships'], 10).map((x) => x.id)).toEqual(['r-stress', 'r-mindful', 'r-eap', 'r-faq']);
+    expect(resourcesForTopics(all, [], 10)).toEqual([]);
   });
 });

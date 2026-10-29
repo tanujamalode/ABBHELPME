@@ -18,7 +18,7 @@ export default function ChooseTopics() {
   const save = async () => {
     setBusy(true); setError(null);
     try { await completeOnboarding(selected); }
-    catch { setError('Could not save your choices on this device. Please try again.'); setBusy(false); }
+    catch { setError('Could not save your choices. Check your internet connection and try again.'); setBusy(false); }
   };
 
   return (
@@ -28,13 +28,13 @@ export default function ChooseTopics() {
           <TopicProgress count={selected.length} />
           {error ? <Text variant="small" style={{ color: colors.redDark, textAlign: 'center' }}>{error}</Text> : null}
           <Button label="Continue" icon="arrow-forward" onPress={save} disabled={!canContinue(selected)} loading={busy}
-            accessibilityHint={canContinue(selected) ? undefined : `Choose at least ${MIN_TOPIC_COUNT} topics to continue`} />
+            accessibilityHint={canContinue(selected) ? undefined : 'Choose at least one category to continue'} />
         </View>
       }
     >
       <Text variant="label" style={{ color: colors.red, letterSpacing: 1, marginBottom: space.xs }}>STEP 2 OF 2</Text>
-      <Header title="What would you like help with?"
-        subtitle={`Choose at least ${MIN_TOPIC_COUNT} topics — pick as many as you like. They personalise this app on your device only, and you can change them later.`} />
+      <Header title="What support are you looking for?"
+        subtitle="Choose the categories that matter to you — as many as you like. They personalise your feed, resources and suggestions, and you can change them later." />
       <View style={{ marginBottom: space.lg }}>
         <CapySays pose={capy.pose} message={capy.text} size={84} motion="pop" />
       </View>

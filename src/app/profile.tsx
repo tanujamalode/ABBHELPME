@@ -8,7 +8,7 @@ import { Badge, Button, Card, Field, Header, Notice, Screen, Text } from '@/comp
 import { space } from '@/constants/brand';
 import { outfitForRole } from '@/lib/capy';
 import { EXPERIENCE_OPTIONS, ROLE_OPTIONS } from '@/lib/profileOptions';
-import { verifiedLabel, verifier } from '@/data/auth';
+import { verifiedLabel } from '@/data/auth';
 import { useApp } from '@/state/AppProvider';
 
 export default function EditProfile() {
@@ -23,7 +23,7 @@ export default function EditProfile() {
     if (name.trim().length > 30) { setErr('Please keep your name within 30 characters.'); return; }
     setBusy(true); setErr(null);
     try { await updateProfile({ displayName: name.trim() || 'there', role, experience }); router.back(); }
-    catch { setErr('Could not save on this device. Please try again.'); setBusy(false); }
+    catch { setErr('Could not save. Check your connection and try again.'); setBusy(false); }
   };
 
   return (
@@ -32,7 +32,7 @@ export default function EditProfile() {
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: space.sm, marginBottom: space.lg }}>
         <Badge label={profile?.verified ? verifiedLabel() : 'Not verified'} tone={profile?.verified ? 'ok' : 'warn'} />
         <Text variant="small" style={{ flex: 1 }} numberOfLines={2}>
-          {verifier.isDemo ? 'Verification is simulated in this prototype.' : account?.email ? `Signed in as ${account.email}` : null}
+          {account?.email ? `Signed in as ${account.email}` : null}
         </Text>
       </View>
       <View style={{ marginBottom: space.lg }}>

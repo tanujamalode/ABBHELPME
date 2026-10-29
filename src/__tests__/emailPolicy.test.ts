@@ -22,8 +22,8 @@ describe('who may register', () => {
     expect(isAllowedEmail('not an email')).toBe(false);
   });
 
-  it('matches the server rule in supabase/002_email_auth.sql', () => {
-    const sql = fs.readFileSync(path.resolve(__dirname, '..', '..', 'supabase', '002_email_auth.sql'), 'utf8');
+  it('matches the server rule in supabase/setup.sql', () => {
+    const sql = fs.readFileSync(path.resolve(__dirname, '..', '..', 'supabase', 'setup.sql'), 'utf8');
     for (const d of OUTLOOK_DOMAINS) expect(sql).toContain(d.replace(/\./g, '\\.'));
     expect(sql).toContain('abb\\.com');
   });

@@ -4,9 +4,9 @@ import { router } from 'expo-router';
 import { MoodChart } from '@/components/MoodChart';
 import { Button, Card, Chip, EmptyState, Header, IconTile, Loading, Notice, Screen, Text } from '@/components/ui';
 import { space } from '@/constants/brand';
-import { DEMO_MODE } from '@/constants/demo';
 import { MoodIcon } from '@/components/MoodIcon';
 import { MOOD_LABEL, TAG_LABEL, WEEKDAY, periodStats } from '@/lib/moodStats';
+import { factorSentence, focusInsights } from '@/lib/pulse';
 import { useData } from '@/state/useData';
 
 export default function MoodTrends() {
@@ -21,7 +21,7 @@ export default function MoodTrends() {
 
   return (
     <Screen>
-      <Header title="Mood trends" back subtitle="Your personal check-ins on this device." />
+      <Header title="Mood trends" back subtitle="Your personal check-ins." />
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: space.sm, paddingBottom: space.md }}>
         <Chip label="This week" selected={range === 7} onPress={() => setRange(7)} />
         <Chip label="Last 30 days" selected={range === 30} onPress={() => setRange(30)} />
@@ -62,14 +62,26 @@ export default function MoodTrends() {
           {s.topTags.length ? (
             <Insight icon="pricetags-outline" text={`Most tagged: ${s.topTags.map((t) => `${TAG_LABEL[t.tag]} (${t.count})`).join(', ')}.`} />
           ) : <Insight icon="pricetags-outline" text="Add tags when you check in to see what shapes your days." />}
+          {(() => {
+            const focus = focusInsights(moods);
+            if (!focus.length) return null;
+            return (
+              <>
+                <Text variant="h2" accessibilityRole="header" style={{ marginTop: space.lg, marginBottom: space.sm }}>What shapes your days</Text>
+                {focus.map((f) => (
+                  <Insight key={f.tag} icon={f.tag === 'sleep' ? 'moon-outline' : f.tag === 'team' ? 'people-outline' : 'briefcase-outline'} text={factorSentence(f)} />
+                ))}
+                <Text variant="small">From your last 30 days of check-ins. Patterns, not verdicts.</Text>
+              </>
+            );
+          })()}
           {s.toughDayTag?.tag === 'workload' ? (
             <Button label="Ideas for managing workload" variant="secondary" icon="leaf-outline"
               onPress={() => router.push({ pathname: '/resource/[id]', params: { id: 'r-balance' } })} style={{ marginTop: space.sm }} />
           ) : null}
         </>
       )}
-      {DEMO_MODE ? <Notice tone="warn" icon="flask-outline" text="Prototype: this history is sample data created when you signed up." /> : null}
-      <Notice icon="eye-off-outline" text="Only you can see this. Check-ins stay on this device, are never shared with HR or managers, and don't trigger any alert." />
+      <Notice icon="eye-off-outline" text="Only you can see this. Check-ins are stored in your account, are never shown to colleagues, HR or managers, and don't trigger any alert." />
     </Screen>
   );
 }

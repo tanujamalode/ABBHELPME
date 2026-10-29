@@ -5,7 +5,8 @@ import { AuthorTag, VoteControl } from '@/components/community';
 import { Badge, Card, IconButton, IconTile, Text, type IconName } from '@/components/ui';
 import { showPostMenu } from '@/components/postActions';
 import { colors, space, type Accent } from '@/constants/brand';
-import type { Post, PostKind } from '@/data/types';
+import type { Post, PostKind, PostMeta } from '@/data/types';
+import { attempt } from '@/lib/attempt';
 import { originBadge } from '@/lib/origin';
 import { timeAgo } from '@/lib/time';
 import { useApp } from '@/state/AppProvider';
@@ -15,18 +16,21 @@ export const KIND_STYLE: Record<PostKind, { icon: IconName; accent: Accent }> = 
   personal: { icon: 'heart-outline', accent: 'rose' },
   work_question: { icon: 'bulb-outline', accent: 'blue' },
   achievement: { icon: 'ribbon-outline', accent: 'amber' },
+  discussion: { icon: 'chatbubbles-outline', accent: 'teal' },
+  poll: { icon: 'stats-chart-outline', accent: 'violet' },
+  idea: { icon: 'sparkles-outline', accent: 'amber' },
 };
 
-export function PostCard({ post, compact }: { post: Post; compact?: boolean }) {
+/**
+ * `meta` comes from a list screen that loaded it for every card in one go (repo.getPostMeta);
+ * without it the card loads its own.
+ */
+export function PostCard({ post, compact, meta }: { post: Post; compact?: boolean; meta?: PostMeta }) {
   const { repo, bump } = useApp();
-  const { data } = useData(async (r) => {
-    const [scores, vote, saved, comments] = await Promise.all([
-      r.getScores('post', [post.id]), r.getVote('post', post.id), r.isBookmarked('post', post.id), r.listComments(post.id),
-    ]);
-    return { score: scores[post.id] ?? 0, vote, saved, comments: comments.length, solved: comments.some((c) => c.accepted) };
-  }, [post.id]);
+  const { data: own } = useData(async (r) => (meta ? null : (await r.getPostMeta([post.id]))[post.id] ?? null), [post.id, !!meta]);
+  const data = meta ?? own ?? undefined;
   const ks = KIND_STYLE[post.kind];
-  const mine = !post.sample;
+  const mine = post.mine;
 
   const open = () => router.push({ pathname: '/post/[id]', params: { id: post.id } });
 
@@ -54,7 +58,7 @@ export function PostCard({ post, compact }: { post: Post; compact?: boolean }) {
       </Pressable>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: space.xs }}>
         <VoteControl score={data?.score ?? 0} vote={data?.vote ?? null} disabled={mine}
-          onVote={async (v, reason) => { await repo.setVote('post', post.id, v, reason ?? null); bump(); }} />
+          onVote={(v, reason) => { void attempt(async () => { await repo.setVote('post', post.id, v, reason ?? null); bump(); }, 'save your vote'); }} />
         <Pressable accessibilityRole="button" accessibilityLabel={`${data?.comments ?? 0} ${post.kind === 'work_question' ? 'answers' : 'comments'}. Open discussion`}
           onPress={open} style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, marginLeft: space.md }}>
           <Ionicons name="chatbubble-outline" size={19} color={colors.muted} />
@@ -62,7 +66,7 @@ export function PostCard({ post, compact }: { post: Post; compact?: boolean }) {
         </Pressable>
         <View style={{ flex: 1 }} />
         <IconButton icon={data?.saved ? 'bookmark' : 'bookmark-outline'} label={data?.saved ? 'Remove from saved' : 'Save'} active={data?.saved}
-          onPress={async () => { await repo.toggleBookmark('post', post.id); bump(); }} />
+          onPress={() => { void attempt(async () => { await repo.toggleBookmark('post', post.id); bump(); }, 'save that'); }} />
         <IconButton icon="ellipsis-vertical" label="More options" onPress={() => showPostMenu(post, repo, bump)} />
       </View>
     </Card>

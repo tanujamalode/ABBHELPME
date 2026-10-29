@@ -4,7 +4,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { router } from 'expo-router';
 import { Capy, CapyAvatar } from '@/components/Capy';
-import { Badge, IconTile, Text } from '@/components/ui';
+import { Badge, Button, IconTile, Text } from '@/components/ui';
 import { accents, colors, radius, shadow, space } from '@/constants/brand';
 import type { Resource } from '@/data/types';
 import { STARTER_PROMPTS, localAssistant, type AssistantReply } from '@/lib/assistant';
@@ -16,7 +16,7 @@ type Msg = { id: string; from: 'me' | 'bot' } & Partial<AssistantReply> & { text
 
 const WELCOME: Msg = {
   id: 'welcome', from: 'bot',
-  text: "Hi, I'm Capy! Ask me about well-being, HR, IT or the workplace and I'll point you to the right resource.",
+  text: "Hi, I'm Cappy! Ask me about well-being, HR, IT or the workplace and I'll point you to the right resource.",
 };
 
 export default function Assistant() {
@@ -53,10 +53,10 @@ export default function Assistant() {
         </Pressable>
         <CapyAvatar size={42} pose="headphones" />
         <View style={{ flex: 1 }}>
-          <Text variant="h3" accessibilityRole="header">Capy</Text>
-          <Text variant="small">Help assistant · works offline</Text>
+          <Text variant="h3" accessibilityRole="header">Cappy</Text>
+          <Text variant="small">Your guide · runs on your phone</Text>
         </View>
-        <Badge label="Preview" tone="sample" />
+        <Badge label="Guide" tone="neutral" />
       </View>
 
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={0}>
@@ -70,12 +70,12 @@ export default function Assistant() {
           ListHeaderComponent={
             <>
             <View style={{ alignItems: 'center', marginBottom: space.md }}>
-              <Capy pose="hi" size={120} label="Capy waving hello" />
+              <Capy pose="hi" size={120} label="Cappy waving hello" />
             </View>
             <View style={styles.privacy}>
               <Ionicons name="lock-closed-outline" size={14} color={colors.muted} />
               <Text variant="small" style={{ flex: 1 }}>
-                Chats aren&apos;t saved and never leave this device. Capy isn&apos;t a person or AI, isn&apos;t monitored and can&apos;t contact anyone.
+                Chats aren&apos;t saved or sent anywhere. Cappy isn&apos;t a person or AI, isn&apos;t monitored and can&apos;t contact anyone.
               </Text>
             </View>
             </>
@@ -86,7 +86,7 @@ export default function Assistant() {
               {typing ? (
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', gap: space.sm }}>
                   <Capy pose="thinking" size={56} />
-                  <View style={[styles.bubble, styles.bot]}><Text variant="small">Capy is thinking…</Text></View>
+                  <View style={[styles.bubble, styles.bot]}><Text variant="small">Cappy is thinking…</Text></View>
                 </View>
               ) : null}
               {msgs.length === 1 ? (
@@ -108,7 +108,7 @@ export default function Assistant() {
         <View style={styles.composer}>
           <TextInput
             value={input} onChangeText={setInput} placeholder="Ask a question…" placeholderTextColor={colors.muted}
-            accessibilityLabel="Message Capy" style={styles.input} multiline maxLength={500}
+            accessibilityLabel="Message Cappy" style={styles.input} multiline maxLength={500}
             onSubmitEditing={() => send(input)} blurOnSubmit returnKeyType="send"
           />
           <Pressable accessibilityRole="button" accessibilityLabel="Send" accessibilityState={{ disabled: !input.trim() || typing }}
@@ -142,6 +142,11 @@ function Bubble({ msg, byId }: { msg: Msg; byId: Map<string, Resource> }) {
         ) : null}
         <Text variant="body" style={{ color: mine ? '#fff' : colors.navy }}>{msg.text}</Text>
       </View>
+      {(msg.actions ?? []).map((a) => (
+        <View key={`${a.href}:${a.label}`} style={{ alignSelf: 'stretch' }}>
+          <Button label={a.label} variant="secondary" onPress={() => router.push(a.href as never)} />
+        </View>
+      ))}
       {cards.map((r) => (
         <Pressable key={r.id} accessibilityRole="button" accessibilityLabel={`Open ${r.title}`}
           onPress={() => router.push({ pathname: '/resource/[id]', params: { id: r.id } })}

@@ -1,58 +1,81 @@
-import { useState } from 'react';
-import { Switch, View } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Alert, Linking, Switch, View } from 'react-native';
 import { router } from 'expo-router';
-import { Badge, Card, Header, IconTile, Loading, Notice, Screen, Text, type IconName } from '@/components/ui';
+import { Badge, Card, EmptyState, ErrorState, Header, IconTile, Loading, Notice, Screen, Text, type IconName } from '@/components/ui';
 import { colors, space, type Accent } from '@/constants/brand';
-import { DEMO_MODE } from '@/constants/demo';
+import type { NotificationKind } from '@/data/types';
+import { attempt } from '@/lib/attempt';
+import { syncReminders } from '@/lib/reminders';
 import { timeAgo } from '@/lib/time';
 import { useApp } from '@/state/AppProvider';
 import { useData } from '@/state/useData';
 
-const H = 3_600_000;
-/** Mock inbox. Real in-app notifications need the shared community (Phase 2). */
-const SAMPLE_INBOX: { id: string; icon: IconName; accent: Accent; title: string; body: string; ago: number; href: string }[] = [
-  { id: 'n1', icon: 'chatbubble-ellipses', accent: 'blue', title: 'Someone answered your question', body: '“How do I request a second monitor?” has a new answer.', ago: 2 * H, href: '/community' },
-  { id: 'n2', icon: 'checkmark-circle', accent: 'green', title: 'Your answer was accepted', body: 'Your VPN answer helped. You earned 15 points.', ago: 20 * H, href: '/contribution' },
-  { id: 'n3', icon: 'bulb', accent: 'amber', title: 'Tip from Capy', body: 'Ten minutes outside between meetings can reset your day.', ago: 30 * H, href: '/resource/r-mindful' },
-  { id: 'n4', icon: 'pulse', accent: 'violet', title: 'Your week in review', body: 'You checked in on 6 of 7 days. Nice rhythm.', ago: 52 * H, href: '/mood' },
-];
+const KIND: Record<NotificationKind, { icon: IconName; accent: Accent }> = {
+  answer: { icon: 'chatbubble-ellipses', accent: 'blue' },
+  comment: { icon: 'chatbubble', accent: 'rose' },
+  accepted: { icon: 'checkmark-circle', accent: 'green' },
+  shoutout: { icon: 'ribbon', accent: 'amber' },
+};
 
 export default function Notifications() {
   const { repo, bump } = useApp();
+  const inbox = useData((r) => r.listNotifications());
   const { data, loading } = useData((r) => r.getNotificationPrefs());
-  const set = async (patch: Partial<NonNullable<typeof data>>) => { if (data) { await repo.setNotificationPrefs({ ...data, ...patch }); bump(); } };
+
+  // Opening the inbox marks everything read, once the list has loaded.
+  const marked = useRef(false);
+  useEffect(() => {
+    if (marked.current || !inbox.data?.some((n) => !n.read)) return;
+    marked.current = true;
+    repo.markNotificationsRead().then(bump).catch(() => { marked.current = false; });
+  }, [inbox.data, repo, bump]);
+
+  const set = async (patch: Partial<NonNullable<typeof data>>) => {
+    if (!data) return;
+    const next = { ...data, ...patch };
+    const saved = await attempt(async () => { await repo.setNotificationPrefs(next); bump(); return true; });
+    if (!saved) return;
+    const result = await syncReminders(next);
+    if (result === 'denied') {
+      Alert.alert('Notifications are off', 'Allow notifications for this app in your phone settings to get reminders.', [
+        { text: 'Not now', style: 'cancel' }, { text: 'Open settings', onPress: () => { void Linking.openSettings(); } },
+      ]);
+    }
+  };
   const items = [
-    { key: 'dailyReminder' as const, title: 'Gentle check-in reminder', sub: 'A once-a-day nudge to take a moment for yourself.' },
-    { key: 'resourceTips' as const, title: 'Resource tips', sub: 'Occasional pointers to saved resources.' },
+    { key: 'dailyReminder' as const, title: 'Gentle check-in reminder', sub: 'A once-a-day nudge at 4 pm to take a moment for yourself.' },
+    { key: 'microBreak' as const, title: 'Micro-break nudges', sub: 'Two short reminders a day, at 11 am and 3 pm.' },
+    { key: 'hydration' as const, title: 'Hydration reminders', sub: 'A glass of water at 10, 12, 2 and 4.' },
+    { key: 'resourceTips' as const, title: 'Resource tips', sub: 'A weekly pointer to your saved resources.' },
   ];
-  const [now] = useState(() => Date.now());
+
   return (
     <Screen>
       <Header title="Notifications" back />
-      {DEMO_MODE ? (
-        <>
-          <Text variant="h2" accessibilityRole="header" style={{ marginBottom: space.sm }}>Inbox</Text>
-          <Notice tone="warn" icon="flask-outline" text="Sample notifications for the prototype. Nothing here was sent by anyone." />
-          {SAMPLE_INBOX.map((n) => (
-            <Card key={n.id} onPress={() => router.push(n.href as never)} accessibilityLabel={`${n.title}. ${n.body}`} style={{ marginBottom: space.sm }}>
-              <View style={{ flexDirection: 'row', gap: space.md }}>
-                <IconTile icon={n.icon} accent={n.accent} size={42} />
-                <View style={{ flex: 1 }}>
-                  <Text variant="h3">{n.title}</Text>
-                  <Text variant="small" style={{ marginTop: 2 }}>{n.body}</Text>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
-                    <Badge label="Sample" tone="sample" />
-                    <Text variant="small">{timeAgo(now - n.ago)}</Text>
-                  </View>
-                </View>
+      <Text variant="h2" accessibilityRole="header" style={{ marginBottom: space.sm }}>Inbox</Text>
+      {inbox.loading ? <Loading /> : inbox.error ? <ErrorState text={inbox.error} onRetry={inbox.reload} /> : !inbox.data?.length ? (
+        <EmptyState capy="calm" title="Nothing new" text="You will see a note here when someone answers your question or accepts your answer." />
+      ) : inbox.data.map((n) => (
+        <Card key={n.id}
+          onPress={n.postId ? () => router.push({ pathname: '/post/[id]', params: { id: n.postId! } })
+            : n.kind === 'shoutout' ? () => router.push('/recognition') : undefined}
+          accessibilityLabel={`${n.title}. ${n.body}`} style={{ marginBottom: space.sm }}>
+          <View style={{ flexDirection: 'row', gap: space.md }}>
+            <IconTile icon={KIND[n.kind].icon} accent={KIND[n.kind].accent} size={42} />
+            <View style={{ flex: 1 }}>
+              <Text variant="h3">{n.title}</Text>
+              <Text variant="small" style={{ marginTop: 2 }} numberOfLines={2}>{n.body}</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 6 }}>
+                {!n.read ? <Badge label="New" tone="ok" /> : null}
+                <Text variant="small">{timeAgo(n.createdAt)}</Text>
               </View>
-            </Card>
-          ))}
-        </>
-      ) : null}
+            </View>
+          </View>
+        </Card>
+      ))}
 
       <Text variant="h2" accessibilityRole="header" style={{ marginTop: space.lg, marginBottom: space.sm }}>Reminders</Text>
-      <Notice text="No notifications are sent in this version. These preferences are stored on this device for when local reminders are added. This app has no remote or push notifications." />
+      <Notice text="Reminders are scheduled on this phone only. Nothing is sent from a server, and turning one off cancels it. Replies and shout-outs appear in the inbox above." />
       {loading || !data ? <Loading /> : items.map((i) => (
         <View key={i.key} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: space.md, borderBottomWidth: 1, borderBottomColor: colors.border }}>
           <View style={{ flex: 1, paddingRight: space.md }}>

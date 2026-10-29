@@ -12,10 +12,18 @@ import { Button, EmptyState, Loading, Screen } from '@/components/ui';
 function Gate() {
   const { status, error, retry, profile, unlocked } = useApp();
   if (status === 'loading') return <Screen scroll={false}><Loading label="Getting things ready…" /></Screen>;
+  if (status === 'unconfigured') {
+    return (
+      <Screen scroll={false}>
+        <EmptyState capy="concerned" title="Backend not configured"
+          text="Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY to the .env file (see .env.example), then restart with: npx expo start -c" />
+      </Screen>
+    );
+  }
   if (status === 'error') {
     return (
       <Screen scroll={false}>
-        <EmptyState capy="concerned" title="Can't open local storage" text={error ?? undefined}
+        <EmptyState capy="concerned" title="Can't reach the server" text={error ?? undefined}
           action={<Button label="Try again" onPress={retry} />} />
       </Screen>
     );
@@ -48,7 +56,19 @@ function Gate() {
         <Stack.Screen name="notifications" />
         <Stack.Screen name="topics" />
         <Stack.Screen name="privacy" />
+        <Stack.Screen name="more" />
         <Stack.Screen name="help" />
+        <Stack.Screen name="communities/index" />
+        <Stack.Screen name="communities/[id]" />
+        <Stack.Screen name="people" />
+        <Stack.Screen name="messages" />
+        <Stack.Screen name="chat/[id]" />
+        <Stack.Screen name="meditate" options={{ gestureEnabled: false }} />
+        <Stack.Screen name="microbreaks" />
+        <Stack.Screen name="microbreak/[id]" />
+        <Stack.Screen name="journey" />
+        <Stack.Screen name="recognition" />
+        <Stack.Screen name="feedback" />
       </Stack.Protected>
     </Stack>
   );

@@ -1,4 +1,4 @@
-import type { Comment, Post, Vote } from '@/data/types';
+import type { Comment, Post } from '@/data/types';
 
 /**
  * Contribution score ("karma"). Rewards helpfulness, not popularity.
@@ -8,8 +8,7 @@ import type { Comment, Post, Vote } from '@/data/types';
  * - Votes on your own content don't count; neither do answers you accept on your own questions.
  * - Activity points are capped per day so the score can't be farmed.
  *
- * Phase 1 only has this device's data, so "received" votes come from the shared
- * community in Phase 2. `received` is accepted here so the server can reuse this.
+ * `received` is what colleagues gave you: votes on your posts and answers, and answers of yours they accepted.
  */
 export const POINTS = {
   question: 2,
@@ -63,8 +62,8 @@ export function tierFor(score: number): { tier: Tier; next: Tier | null; progres
 }
 
 /**
- * @param myPosts posts written on this device (not samples)
- * @param myComments comments written on this device (not samples)
+ * @param myPosts posts the user wrote
+ * @param myComments comments the user wrote
  * @param postsById lookup used to tell answers (on questions) from support comments
  */
 export function computeContribution(
@@ -75,16 +74,16 @@ export function computeContribution(
 ): Contribution {
   const events: { t: number; pts: number; kind: 'question' | 'answer' | 'support' | 'achievement' }[] = [];
   for (const p of myPosts) {
-    if (p.sample) continue;
+    if (!p.mine) continue;
     if (p.kind === 'work_question') events.push({ t: p.createdAt, pts: POINTS.question, kind: 'question' });
     else if (p.kind === 'achievement') events.push({ t: p.createdAt, pts: POINTS.achievement, kind: 'achievement' });
   }
   const answerCats = new Map<string, number>();
   for (const c of myComments) {
-    if (c.sample) continue;
+    if (!c.mine) continue;
     const parent = postsById.get(c.postId);
     // Answering your own question earns nothing.
-    if (parent && !parent.sample && myPosts.some((p) => p.id === parent.id)) continue;
+    if (parent?.mine) continue;
     if (parent?.kind === 'work_question') {
       events.push({ t: c.createdAt, pts: POINTS.answer, kind: 'answer' });
       answerCats.set(parent.category, (answerCats.get(parent.category) ?? 0) + 1);
@@ -126,7 +125,3 @@ export function computeContribution(
   return { score, ...tierFor(score), breakdown, topCategory: best >= 3 ? topCategory : null, cappedDays: capped.size };
 }
 
-/** Score shown next to a post or answer: sample baseline plus this device's vote. */
-export function displayScore(base: number, myVote: Vote | null): number {
-  return base + (myVote?.value ?? 0);
-}

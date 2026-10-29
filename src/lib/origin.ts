@@ -1,5 +1,6 @@
-/** Badge text for where a post or answer is stored and who wrote it. */
-export function originBadge(x: { sample: boolean; shared?: boolean }): { label: string; tone: 'sample' | 'local' } {
-  if (x.shared) return x.sample ? { label: 'Colleague', tone: 'local' } : { label: 'Shared by you', tone: 'local' };
-  return x.sample ? { label: 'Sample content', tone: 'sample' } : { label: 'On this device only', tone: 'local' };
+import type { Post } from '@/data/types';
+
+/** Badge text for who wrote a post. Personal posts are anonymous to colleagues unless the author opts in. */
+export function originBadge(x: Pick<Post, 'mine'>): { label: string; tone: 'local' } {
+  return { label: x.mine ? 'Shared by you' : 'Colleague', tone: 'local' };
 }

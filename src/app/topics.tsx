@@ -4,7 +4,7 @@ import { router } from 'expo-router';
 import { Button, Header, Loading, Notice, Screen, Text } from '@/components/ui';
 import { TopicPicker, TopicProgress } from '@/components/TopicPicker';
 import { colors, space } from '@/constants/brand';
-import { MIN_TOPIC_COUNT, canContinue } from '@/lib/topics';
+import { canContinue } from '@/lib/topics';
 import { useApp } from '@/state/AppProvider';
 
 export default function EditTopics() {
@@ -18,7 +18,7 @@ export default function EditTopics() {
   const save = async () => {
     setBusy(true); setErr(null);
     try { await repo.saveSelectedTopicIds(selected); bump(); router.back(); }
-    catch { setErr('Could not save on this device. Please try again.'); setBusy(false); }
+    catch { setErr('Could not save. Check your internet connection and try again.'); setBusy(false); }
   };
 
   return (
@@ -31,9 +31,9 @@ export default function EditTopics() {
         </View>
       }
     >
-      <Header title="Topic Preferences" back subtitle={`Keep at least ${MIN_TOPIC_COUNT} topics selected.`} />
+      <Header title="Your categories" back subtitle="Choose the categories that matter to you." />
       <TopicPicker selected={selected} onChange={setSelected} />
-      <Notice text="Topics personalise this app on your device. They aren't used to score or assess you." icon="shield-checkmark-outline" />
+      <Notice text="Topics personalise your feed and suggestions. They aren't used to score or assess you." icon="shield-checkmark-outline" />
     </Screen>
   );
 }

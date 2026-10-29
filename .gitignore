@@ -34,3 +34,7 @@ coverage/
 npm-debug.*
 yarn-debug.*
 yarn-error.*
+
+# Credentials for dummy and staff accounts: keep local, never publish
+supabase/seed_admin_users.sql
+supabase/seed_test_users.sql

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Alert, BackHandler, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, View } from 'react-native';
+import { BackHandler, KeyboardAvoidingView, Platform, ScrollView, StyleSheet, Switch, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { confirmDeleteData, confirmSignOut } from '@/components/accountActions';
+import { confirmSignOut } from '@/components/accountActions';
 import { Capy, CapySays } from '@/components/Capy';
 import { OtpStep } from '@/components/OtpStep';
 import { Select } from '@/components/Select';
 import { Badge, BrandMark, Button, Field, Text } from '@/components/ui';
 import { accents, colors, radius, shadow, space } from '@/constants/brand';
-import { verifiedLabel, verifier } from '@/data/auth';
+import { devLoginEnabled, signInWithPassword, verifiedLabel, verifier } from '@/data/auth';
 import { outfitForRole } from '@/lib/capy';
 import { ALLOWED_EMAIL_HINT, isAllowedEmail } from '@/lib/emailPolicy';
 import { EXPERIENCE_OPTIONS, ROLE_OPTIONS, roleLabel } from '@/lib/profileOptions';
@@ -16,14 +16,13 @@ import { REQUEST_FAILURE_TEXT, VerificationError, isValidEmail, type OtpChalleng
 import { useApp } from '@/state/AppProvider';
 
 /** landing → email → code → details (only for a new account without a saved profile). */
-type Mode = 'landing' | 'email' | 'code' | 'details';
+type Mode = 'landing' | 'email' | 'code' | 'details' | 'test';
 type Intent = 'register' | 'login';
-const STEP: Record<Exclude<Mode, 'landing'>, number> = { email: 1, code: 2, details: 3 };
+const STEP: Record<Exclude<Mode, 'landing'>, number> = { email: 1, code: 2, details: 3, test: 1 };
 
 export default function Welcome() {
   const {
-    profile, account, signedIn, cloud, persistent,
-    finishSignIn, createProfile, unlock, signOut, replaceDeviceData, deleteAllLocalData,
+    profile, account, signedIn, finishSignIn, createProfile, unlock, signOut,
   } = useApp();
   // Signed in but no profile yet (e.g. the app was closed mid-registration): continue at the details step.
   const [mode, setMode] = useState<Mode>(() => (account && !profile ? 'details' : 'landing'));
@@ -35,6 +34,7 @@ export default function Welcome() {
   const [role, setRole] = useState<string | null>(null);
   const [experience, setExperience] = useState<string | null>(null);
   const [missing, setMissing] = useState(false);
+  const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,25 +68,28 @@ export default function Welcome() {
     setBusy(false);
   };
 
-  const confirmReplace = () => Alert.alert(
-    'Another account used this device',
-    'This device holds private data (mood check-ins, notes, saved items) from a different account. To continue, it will be removed from this device. Shared community posts are not affected.',
-    [
-      { text: 'Cancel', style: 'cancel', onPress: () => { void signOut(); setMode('landing'); } },
-      { text: 'Remove and continue', style: 'destructive', onPress: () => { void replaceDeviceData(); } },
-    ]);
-
   /** Code accepted: the session (JWT) exists now. */
   const onVerified = async () => {
     try {
-      const r = await finishSignIn(email);
+      const r = await finishSignIn();
       if (r === 'needs_profile') setMode('details');
-      else if (r === 'other_account') confirmReplace();
       // 'ready': navigation moves on by itself.
     } catch {
       setError('Could not finish signing in. Please try again.');
       setMode('email');
     }
+  };
+
+  /** Test accounts only (see signInWithPassword). */
+  const testSignIn = async () => {
+    setBusy(true); setError(null);
+    const ok = await signInWithPassword(email, password);
+    if (!ok) { setError('Wrong email or password, or the test account is not confirmed.'); setBusy(false); return; }
+    try {
+      const r = await finishSignIn();
+      if (r === 'needs_profile') setMode('details');
+    } catch { setError('Could not finish signing in. Please try again.'); }
+    setBusy(false);
   };
 
   const onCreate = async () => {
@@ -129,20 +132,19 @@ export default function Welcome() {
                 <Button label={mode === 'details' ? 'Cancel' : 'Back'} variant="ghost" icon="chevron-back" onPress={goBack}
                   style={{ paddingHorizontal: 0 }} />
                 <View style={{ flex: 1 }} />
-                <Text variant="label" style={{ color: colors.red, letterSpacing: 1 }}>STEP {STEP[mode]} OF {steps}</Text>
+                {mode === 'test' ? <Text variant="label" style={{ color: colors.red, letterSpacing: 1 }}>TEST SIGN-IN</Text>
+                  : <Text variant="label" style={{ color: colors.red, letterSpacing: 1 }}>STEP {STEP[mode]} OF {steps}</Text>}
               </View>
 
               {mode === 'email' ? (
                 <View>
-                  <CapySays pose="hi" message={intent === 'register' ? "Hi! I'm Capy. Let's set you up." : 'Welcome back! Which email do you use?'}
+                  <CapySays pose="hi" message={intent === 'register' ? "Hi! I'm Cappy. Let's set you up." : 'Welcome back! Which email do you use?'}
                     size={96} motion="pop" tint={colors.bg} />
                   <Text variant="title" accessibilityRole="header" style={{ marginTop: space.xl, marginBottom: space.xs }}>
                     {intent === 'register' ? 'Create your account' : 'Log in'}
                   </Text>
                   <Text variant="small" style={{ marginBottom: space.lg }}>
-                    {verifier.isDemo
-                      ? 'Prototype: no email is sent. You will get a demo code on the next screen.'
-                      : "We'll email you a 6-digit code. No password needed."}
+                    We&apos;ll email you a 6-digit code. No password needed.
                   </Text>
                   <Field label="Email" value={email} onChangeText={(t) => { setEmail(t); setMissing(false); setError(null); }}
                     placeholder="you@outlook.com or you@abb.com" keyboardType="email-address" autoCapitalize="none" autoCorrect={false}
@@ -162,6 +164,20 @@ export default function Welcome() {
               {mode === 'code' && challenge ? (
                 <OtpStep email={email.trim()} challenge={challenge} createUser={intent === 'register'} onChallenge={setChallenge}
                   onVerified={onVerified} onChangeEmail={() => { setMode('email'); setError(null); }} />
+              ) : null}
+
+              {mode === 'test' ? (
+                <View>
+                  <Text variant="title" accessibilityRole="header" style={{ marginBottom: space.xs }}>Test sign-in</Text>
+                  <Text variant="small" style={{ marginBottom: space.lg }}>
+                    For dummy accounts created in the Supabase dashboard. No email is sent. Not for real colleagues.
+                  </Text>
+                  <Field label="Email" value={email} onChangeText={(t) => { setEmail(t); setError(null); }} placeholder="test1@outlook.com"
+                    keyboardType="email-address" autoCapitalize="none" autoCorrect={false} />
+                  <Field label="Password" value={password} onChangeText={(t) => { setPassword(t); setError(null); }} secureTextEntry
+                    autoCapitalize="none" autoCorrect={false} error={error} onSubmitEditing={testSignIn} returnKeyType="go" />
+                  <Button label="Sign in" onPress={testSignIn} loading={busy} disabled={!email.trim() || !password} />
+                </View>
               ) : null}
 
               {mode === 'details' ? (
@@ -203,14 +219,14 @@ export default function Welcome() {
                   {profile ? `Welcome back${profile.displayName && profile.displayName !== 'there' ? `,\n${profile.displayName}` : ''}.` : 'Real people.\nReal conversations.'}
                 </Text>
                 <Text variant="body" style={{ textAlign: 'center', marginTop: space.sm }}>
-                  {profile ? 'Capy kept your seat warm.' : 'Share, support and grow — anonymously.'}
+                  {profile ? 'Cappy kept your seat warm.' : 'Share, support and grow — anonymously.'}
                 </Text>
               </View>
 
               {/* Hero: Capy at the laptop, on a soft warm halo */}
               <View style={styles.heroWrap}>
                 <View style={styles.halo} />
-                <Capy pose="laptop" size={230} label="Capy, the ABB Help Me mascot, working on a laptop" />
+                <Capy pose="laptop" size={230} label="Cappy, the ABB Help Me mascot, working on a laptop" />
                 <View style={styles.speech}>
                   <Text variant="h3" style={{ fontSize: 14 }}>{profile ? 'Good to see you again!' : 'Your safe space at work.'}</Text>
                 </View>
@@ -222,30 +238,22 @@ export default function Welcome() {
                   <>
                     <Button label="Unlock" icon="lock-open-outline" onPress={onUnlock} loading={busy} />
                     {account?.email ? <Text variant="small" style={{ textAlign: 'center' }}>Signed in as {account.email}</Text> : null}
-                    {cloud ? <Button label="Sign out" variant="ghost" onPress={() => confirmSignOut(cloud, signOut)} /> : null}
+                    <Button label="Sign out" variant="ghost" onPress={() => confirmSignOut(signOut)} />
                   </>
-                ) : profile ? (
-                  <Button label="Log in with email" icon="mail-outline" onPress={() => start('login')} />
                 ) : (
                   <>
                     <Button label="Get Started" onPress={() => start('register')} />
+                    {devLoginEnabled ? <Button label="Test sign-in (dummy accounts)" variant="ghost" onPress={() => { setError(null); setMode('test'); }} /> : null}
                     <Text variant="small" style={{ textAlign: 'center' }}>
                       Existing user?{' '}
                       <Text variant="small" style={styles.link} accessibilityRole="button" onPress={() => start('login')}>Log in</Text>
                     </Text>
                   </>
                 )}
-                {/* Before unlocking, only this device's data can be wiped: sign out first so the account is kept. */}
-                {profile ? (
-                  <Button label="Delete local data" variant="ghost"
-                    onPress={() => confirmDeleteData(false, async () => { await signOut(); await deleteAllLocalData(); })} />
-                ) : null}
                 <View style={{ flexDirection: 'row', gap: space.sm, marginTop: space.sm }}>
                   <Ionicons name="phone-portrait-outline" size={16} color={colors.muted} style={{ marginTop: 1 }} />
                   <Text variant="small" style={{ flex: 1, fontSize: 12, lineHeight: 16 }}>
-                    {persistent
-                      ? 'Your mood check-ins, notes and saved items stay on this device, in encrypted storage. Only community posts you choose to share are stored online.'
-                      : 'Web preview: private data is held in memory only and is cleared when you reload.'}
+                    Your account is protected by an emailed code. Mood check-ins and saved items are visible only to you. Posts are shared without your name or email.
                   </Text>
                 </View>
               </View>

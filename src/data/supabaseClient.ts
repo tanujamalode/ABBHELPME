@@ -35,7 +35,9 @@ const keystore = {
   removeItem,
 };
 
-/** null when no project is configured: the app then stays fully local with the demo sign-in. */
+/** null when EXPO_PUBLIC_SUPABASE_URL / _ANON_KEY are missing: the app then shows a setup screen. */
+export const isBackendConfigured = !!(url && anonKey);
+
 export const supabase: SupabaseClient | null = url && anonKey
   ? createClient(url, anonKey, {
     auth: {

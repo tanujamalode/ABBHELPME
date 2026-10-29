@@ -17,10 +17,10 @@ const tab = (title: string, on: Name, off: Name) => ({
 /** Centre of the tab bar: Capy peeking over the bar's top edge. Opens the assistant over the tabs. */
 function AssistantButton() {
   return (
-    <Pressable accessibilityRole="button" accessibilityLabel="Ask Capy, the help assistant" onPress={() => router.push('/assistant')}
+    <Pressable accessibilityRole="button" accessibilityLabel="Ask Cappy, the help assistant" onPress={() => router.push('/assistant')}
       style={({ pressed }) => [styles.centerSlot, pressed && { transform: [{ scale: 0.94 }] }]}>
       <Capy pose="headphones" size={66} style={styles.peek} />
-      <Text style={styles.fabLabel}>Ask Capy</Text>
+      <Text style={styles.fabLabel}>Ask Cappy</Text>
     </Pressable>
   );
 }
@@ -41,8 +41,6 @@ export default function TabsLayout() {
       <Tabs.Screen name="ask" options={{ title: 'Ask', tabBarButton: () => <AssistantButton /> }} />
       <Tabs.Screen name="resources" options={tab('Resources', 'library', 'library-outline')} />
       <Tabs.Screen name="wellbeing" options={tab('Well-being', 'leaf', 'leaf-outline')} />
-      {/* Profile & settings: opened from the avatar on Home, not a tab of its own. */}
-      <Tabs.Screen name="more" options={{ href: null }} />
     </Tabs>
   );
 }

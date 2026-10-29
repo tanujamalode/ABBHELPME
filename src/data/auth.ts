@@ -1,8 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { isAllowedEmail } from '@/lib/emailPolicy';
-import {
-  OTP_MAX_ATTEMPTS, VerificationError, createDemoVerifier, type EmployeeVerifier, type RequestFailure,
-} from '@/lib/verification';
+import { OTP_MAX_ATTEMPTS, VerificationError, type EmployeeVerifier, type RequestFailure } from '@/lib/verification';
 import { supabase } from './supabaseClient';
 
 /** Supabase defaults: "Email OTP Expiration" 3600 s, and one email per address every 60 s. */
@@ -23,7 +21,6 @@ export function createEmailVerifier(client: SupabaseClient): EmployeeVerifier {
   let active: { email: string; expiresAt: number; attempts: number } | null = null;
   const key = (e: string) => e.trim().toLowerCase();
   return {
-    isDemo: false,
     async requestCode(email, now = Date.now(), opts = {}) {
       const e = key(email);
       if (!isAllowedEmail(e)) throw new VerificationError('domain');
@@ -46,7 +43,25 @@ export function createEmailVerifier(client: SupabaseClient): EmployeeVerifier {
   };
 }
 
-/** Real email codes when Supabase is configured; otherwise the on-device demo. */
-export const verifier: EmployeeVerifier = supabase ? createEmailVerifier(supabase) : createDemoVerifier();
+/** Used only when no Supabase project is configured; the app shows a setup screen instead of the sign-in. */
+const unavailable: EmployeeVerifier = {
+  async requestCode() { throw new VerificationError('send_failed'); },
+  async confirmCode() { return { ok: false, reason: 'no_code', attemptsLeft: 0 }; },
+};
 
-export const verifiedLabel = () => (verifier.isDemo ? 'Verified · demo' : 'Verified email');
+export const verifier: EmployeeVerifier = supabase ? createEmailVerifier(supabase) : unavailable;
+
+export const verifiedLabel = () => 'Verified email';
+
+/**
+ * Test-only sign-in with a password, for dummy accounts you create in the Supabase dashboard
+ * (Authentication > Users > Add user, with "Auto Confirm User" ticked), so no email is needed.
+ * Off unless EXPO_PUBLIC_DEV_LOGIN=true is in .env. Leave it off for anything real.
+ */
+export const devLoginEnabled = !!supabase && process.env.EXPO_PUBLIC_DEV_LOGIN === 'true';
+
+export async function signInWithPassword(email: string, password: string): Promise<boolean> {
+  if (!supabase || !devLoginEnabled) return false;
+  const { error } = await supabase.auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+  return !error;
+}

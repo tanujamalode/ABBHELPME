@@ -1,21 +1,20 @@
 import { StyleSheet, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Capy } from '@/components/Capy';
-import { DEMO_MODE } from '@/constants/demo';
 import { Badge, Card, Header, IconTile, Loading, Notice, Screen, Text } from '@/components/ui';
 import { accents, colors, radius, space, shadow } from '@/constants/brand';
 import { tierLine } from '@/lib/capy';
 import { DAILY_ACTIVITY_CAP, POINTS, TIERS } from '@/lib/karma';
 import { useContribution } from '@/state/useContribution';
 
-const RULES: { label: string; pts: number; phase2?: boolean }[] = [
-  { label: 'Your answer is accepted', pts: POINTS.acceptedAnswer, phase2: true },
+const RULES: { label: string; pts: number }[] = [
+  { label: 'Your answer is accepted', pts: POINTS.acceptedAnswer },
   { label: 'Answer a work question', pts: POINTS.answer },
   { label: 'Share an achievement', pts: POINTS.achievement },
   { label: 'Ask a work question', pts: POINTS.question },
   { label: 'Leave a supportive comment', pts: POINTS.supportComment },
-  { label: 'Upvote from a colleague', pts: POINTS.upvoteReceived, phase2: true },
-  { label: 'Downvote (with a reason)', pts: POINTS.downvoteReceived, phase2: true },
+  { label: 'Upvote from a colleague', pts: POINTS.upvoteReceived },
+  { label: 'Downvote (with a reason)', pts: POINTS.downvoteReceived },
 ];
 
 export default function ContributionScreen() {
@@ -81,7 +80,6 @@ export default function ContributionScreen() {
             <IconTile icon={r.pts > 0 ? 'add' : 'remove'} accent={r.pts > 0 ? 'green' : 'slate'} size={28} />
             <View style={{ flex: 1, marginLeft: space.md }}>
               <Text variant="body">{r.label}</Text>
-              {r.phase2 ? <Text variant="small">Arrives with the shared community</Text> : null}
             </View>
             <Text variant="h3">{r.pts > 0 ? `+${r.pts}` : r.pts}</Text>
           </View>
@@ -89,9 +87,6 @@ export default function ContributionScreen() {
       </Card>
       <Notice icon="shield-checkmark-outline"
         text={`Your score is never used in performance reviews and isn't linked to your name. Votes on your own posts and answers to your own questions don't count, and activity points are capped at ${DAILY_ACTIVITY_CAP} a day.`} />
-      <Notice text={DEMO_MODE
-        ? 'Prototype: includes sample history and sample votes from colleagues (18 up, 1 down, 1 accepted answer). Real votes arrive with the shared community.'
-        : 'This version only knows activity on this device. Upvotes and accepted answers from colleagues will count once the shared community launches.'} />
     </Screen>
   );
 }

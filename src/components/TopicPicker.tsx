@@ -5,18 +5,13 @@ import { accents, colors, radius, space, type Accent } from '@/constants/brand';
 import { MIN_TOPIC_COUNT, TOPIC_CATALOGUE, toggleTopic } from '@/lib/topics';
 
 const TOPIC_STYLE: Record<(typeof TOPIC_CATALOGUE)[number]['id'], { icon: IconName; accent: Accent }> = {
-  wellbeing: { icon: 'heart-outline', accent: 'rose' },
-  balance: { icon: 'sunny-outline', accent: 'amber' },
-  family: { icon: 'people-outline', accent: 'violet' },
-  team: { icon: 'chatbubbles-outline', accent: 'blue' },
+  mental: { icon: 'heart-outline', accent: 'rose' },
+  workplace: { icon: 'business-outline', accent: 'blue' },
+  relationships: { icon: 'chatbubbles-outline', accent: 'violet' },
   career: { icon: 'trending-up-outline', accent: 'green' },
-  hr: { icon: 'clipboard-outline', accent: 'blue' },
-  it: { icon: 'laptop-outline', accent: 'teal' },
-  workplace: { icon: 'business-outline', accent: 'violet' },
-  inclusion: { icon: 'hand-left-outline', accent: 'rose' },
-  finance: { icon: 'wallet-outline', accent: 'green' },
-  safety: { icon: 'medkit-outline', accent: 'amber' },
-  process: { icon: 'git-branch-outline', accent: 'slate' },
+  team: { icon: 'people-outline', accent: 'teal' },
+  personal: { icon: 'sunny-outline', accent: 'amber' },
+  questions: { icon: 'help-circle-outline', accent: 'slate' },
 };
 
 export function TopicPicker({ selected, onChange }: { selected: string[]; onChange: (next: string[]) => void }) {
@@ -46,11 +41,11 @@ export function TopicProgress({ count }: { count: number }) {
   const pct = Math.min(1, count / MIN_TOPIC_COUNT);
   return (
     <View accessibilityLiveRegion="polite" accessible
-      accessibilityLabel={done ? `${count} topics selected` : `${count} of at least ${MIN_TOPIC_COUNT} selected`}>
+      accessibilityLabel={done ? `${count} categories selected` : `Choose at least ${MIN_TOPIC_COUNT} category`}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-        <Text variant="h3">{done ? `${count} selected` : `${count} of ${MIN_TOPIC_COUNT} minimum`}</Text>
+        <Text variant="h3">{done ? `${count} selected` : 'None selected yet'}</Text>
         {done ? <Text variant="small" style={{ color: accents.green.fg, fontWeight: '600' }}>Ready to go</Text>
-          : <Text variant="small">Pick {MIN_TOPIC_COUNT - count} more</Text>}
+          : <Text variant="small">Pick at least one</Text>}
       </View>
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${pct * 100}%`, backgroundColor: done ? accents.green.fg : colors.red }]} />
